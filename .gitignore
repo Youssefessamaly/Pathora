@@ -1,0 +1,25 @@
+# Secrets
+infrastructure/.env
+
+# Java / Maven
+backend/target/
+*.log
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Expo / React Native
+mobile/node_modules/
+mobile/.expo/
+
+# Environment files
+mobile/.env
+backend/.env
+
+# OS files
+.DS_Store
+Thumbs.db

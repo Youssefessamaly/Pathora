@@ -1,0 +1,2 @@
+-- Initial database baseline for the Intern Platform.
+-- Business tables will be introduced through future Flyway migrations.
