@@ -22,21 +22,24 @@ public class PasswordResetService {
     private final PasswordResetOtpRepository passwordResetOtpRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordResetEmailSender emailSender;
     private final SecureRandom secureRandom;
 
     public PasswordResetService(
             PasswordResetOtpRepository passwordResetOtpRepository,
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            PasswordResetEmailSender emailSender
     ) {
         this.passwordResetOtpRepository = passwordResetOtpRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailSender = emailSender;
         this.secureRandom = new SecureRandom();
     }
 
     @Transactional
-    public Optional<IssuedOtp> requestPasswordReset(String email) {
+    public void requestPasswordReset(String email) {
         String normalizedEmail = email
                 .trim()
                 .toLowerCase(Locale.ROOT);
@@ -45,16 +48,21 @@ public class PasswordResetService {
                 userRepository.findByEmailIgnoreCase(normalizedEmail);
 
         if (userOptional.isEmpty()) {
-            return Optional.empty();
+            return;
         }
 
         User user = userOptional.get();
 
         if (!user.isEnabled()) {
-            return Optional.empty();
+            return;
         }
 
-        return Optional.of(issueOtp(user));
+        IssuedOtp issuedOtp = issueOtp(user);
+
+        emailSender.sendOtp(
+                user.getEmail(),
+                issuedOtp.code()
+        );
     }
 
     private IssuedOtp issueOtp(User user) {
@@ -104,7 +112,7 @@ public class PasswordResetService {
         return String.format("%06d", value);
     }
 
-    public record IssuedOtp(
+    private record IssuedOtp(
             String code,
             OffsetDateTime expiresAt
     ) {
