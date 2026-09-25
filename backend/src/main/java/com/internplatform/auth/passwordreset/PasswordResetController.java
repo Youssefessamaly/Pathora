@@ -13,6 +13,9 @@ public class PasswordResetController {
     private static final String GENERIC_MESSAGE =
             "If an account exists for that email, a verification code will be sent.";
 
+    private static final String PASSWORD_RESET_MESSAGE =
+            "Password has been reset successfully.";
+
     private final PasswordResetService passwordResetService;
 
     public PasswordResetController(
@@ -41,6 +44,20 @@ public class PasswordResetController {
         return passwordResetService.verifyOtp(
                 request.email(),
                 request.code()
+        );
+    }
+
+    @PostMapping("/reset-password")
+    public ResetPasswordResponse resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        passwordResetService.resetPassword(
+                request.resetToken(),
+                request.newPassword()
+        );
+
+        return new ResetPasswordResponse(
+                PASSWORD_RESET_MESSAGE
         );
     }
 }

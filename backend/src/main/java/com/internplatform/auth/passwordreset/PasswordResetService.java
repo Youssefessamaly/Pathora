@@ -144,6 +144,58 @@ public class PasswordResetService {
         );
     }
 
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public void resetPassword(
+            String resetToken,
+            String newPassword
+    ) {
+        String resetTokenHash = hashResetToken(resetToken);
+
+        PasswordResetOtp otp = passwordResetOtpRepository
+                .findByResetTokenHashAndUsedAtIsNullAndInvalidatedAtIsNull(
+                        resetTokenHash
+                )
+                .orElseThrow(this::invalidOrExpiredResetToken);
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        if (otp.getVerifiedAt() == null) {
+            otp.invalidate();
+            passwordResetOtpRepository.save(otp);
+
+            throw invalidOrExpiredResetToken();
+        }
+
+        if (otp.getResetTokenExpiresAt() == null
+                || otp.getResetTokenExpiresAt().isBefore(now)) {
+
+            otp.invalidate();
+            passwordResetOtpRepository.save(otp);
+
+            throw invalidOrExpiredResetToken();
+        }
+
+        User user = userRepository
+                .findById(otp.getUserId())
+                .orElseThrow(this::invalidOrExpiredResetToken);
+
+        if (!user.isEnabled()) {
+            otp.invalidate();
+            passwordResetOtpRepository.save(otp);
+
+            throw invalidOrExpiredResetToken();
+        }
+
+        String newPasswordHash =
+                passwordEncoder.encode(newPassword);
+
+        user.setPasswordHash(newPasswordHash);
+        userRepository.save(user);
+
+        otp.markUsed();
+        passwordResetOtpRepository.save(otp);
+    }
+
     private IssuedOtp issueOtp(User user) {
         invalidateExistingOtps(user);
 
@@ -228,6 +280,13 @@ public class PasswordResetService {
         return new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
                 "Invalid or expired verification code"
+        );
+    }
+
+    private ResponseStatusException invalidOrExpiredResetToken() {
+        return new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Invalid or expired reset token"
         );
     }
 
