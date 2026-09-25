@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,12 +8,14 @@ import { PathoraLogo } from '@/components/pathora-logo';
 import { PathoraColors, PathoraFonts, PathoraGradients, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 
 export default function WelcomeScreen() {
+  const router = useRouter();
+
   const handleCreateAccount = () => {
-    // TODO: navigate to sign up once the auth flow is implemented
+    router.push('/account-type');
   };
 
   const handleLogin = () => {
-    // TODO: navigate to login once the auth flow is implemented
+    router.push('/login');
   };
 
   return (
