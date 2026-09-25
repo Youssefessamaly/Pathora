@@ -1,7 +1,8 @@
-  package com.internplatform.auth.passwordreset;
+package com.internplatform.auth.passwordreset;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,6 +11,11 @@ public interface PasswordResetOtpRepository
 
     Optional<PasswordResetOtp>
     findFirstByUserIdAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(
+            UUID userId
+    );
+
+    List<PasswordResetOtp>
+    findAllByUserIdAndUsedAtIsNullAndInvalidatedAtIsNull(
             UUID userId
     );
 
