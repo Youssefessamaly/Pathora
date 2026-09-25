@@ -25,8 +25,22 @@ public class PasswordResetController {
     public ForgotPasswordResponse forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request
     ) {
-        passwordResetService.requestPasswordReset(request.email());
+        passwordResetService.requestPasswordReset(
+                request.email()
+        );
 
-        return new ForgotPasswordResponse(GENERIC_MESSAGE);
+        return new ForgotPasswordResponse(
+                GENERIC_MESSAGE
+        );
+    }
+
+    @PostMapping("/verify-otp")
+    public VerifyOtpResponse verifyOtp(
+            @Valid @RequestBody VerifyOtpRequest request
+    ) {
+        return passwordResetService.verifyOtp(
+                request.email(),
+                request.code()
+        );
     }
 }

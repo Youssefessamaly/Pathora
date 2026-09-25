@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import jakarta.servlet.DispatcherType;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -30,16 +31,18 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                .dispatcherTypeMatchers(DispatcherType.ERROR)
+                .permitAll()
 
                         .requestMatchers(
-                            "/api/v1/auth/register/intern",
-                            "/api/v1/auth/register/company",
-                            "/api/v1/auth/login",
-                            "/api/v1/auth/forgot-password",
-                            "/actuator/health",
-                            "/actuator/info"
-                    ).permitAll()
-
+                        "/api/v1/auth/register/intern",
+                        "/api/v1/auth/register/company",
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/forgot-password",
+                        "/api/v1/auth/verify-otp",
+                        "/actuator/health",
+                        "/actuator/info"
+                ).permitAll()
                         .requestMatchers("/api/v1/intern/**")
                         .hasRole("INTERN")
 
