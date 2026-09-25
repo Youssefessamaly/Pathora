@@ -1,5 +1,6 @@
 package com.internplatform.auth;
 
+import com.internplatform.security.JwtService;
 import com.internplatform.user.Role;
 import com.internplatform.user.User;
 import com.internplatform.user.UserRepository;
@@ -16,13 +17,16 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
     public AuthService(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     public RegisterResponse registerIntern(RegisterRequest request) {
@@ -31,6 +35,36 @@ public class AuthService {
 
     public RegisterResponse registerCompany(RegisterRequest request) {
         return register(request, Role.COMPANY);
+    }
+
+    public LoginResponse login(LoginRequest request) {
+        String normalizedEmail = request.email()
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        User user = userRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(this::invalidCredentials);
+
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw invalidCredentials();
+        }
+
+        if (!user.isEnabled()) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Account is disabled"
+            );
+        }
+
+        String token = jwtService.generateToken(user);
+
+        return new LoginResponse(
+                token,
+                "Bearer",
+                user.getId(),
+                user.getEmail(),
+                user.getRole()
+        );
     }
 
     private RegisterResponse register(RegisterRequest request, Role role) {
@@ -69,5 +103,12 @@ public class AuthService {
                     "An account with this email already exists"
             );
         }
+    }
+
+    private ResponseStatusException invalidCredentials() {
+        return new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Invalid email or password"
+        );
     }
 }
