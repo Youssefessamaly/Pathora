@@ -1,98 +1,113 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { PathoraButton } from '@/components/pathora-button';
+import { PathoraLogo } from '@/components/pathora-logo';
+import { PathoraColors, PathoraFonts, PathoraGradients, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+export default function WelcomeScreen() {
+  const handleCreateAccount = () => {
+    // TODO: navigate to sign up once the auth flow is implemented
+  };
+
+  const handleLogin = () => {
+    // TODO: navigate to login once the auth flow is implemented
+  };
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        <PathoraLogo style={styles.logo} />
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+        <View style={styles.hero}>
+          <LinearGradient
+            colors={PathoraGradients.hero}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+          <View style={styles.heroCircleAmber} />
+          <View style={styles.heroCircleSoftLower} />
+          <View style={styles.heroCircleSoftRight} />
+        </View>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        <Text style={styles.title}>Find internships built for where you are</Text>
+        <Text style={styles.subtitle}>
+          Pathora matches verified companies in Egypt with students ready to grow.
+        </Text>
+
+        <PathoraButton label="Create account" variant="primary" onPress={handleCreateAccount} style={styles.primaryButton} />
+        <PathoraButton label="I already have an account" variant="secondary" onPress={handleLogin} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
   safeArea: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    backgroundColor: PathoraColors.paper,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: PathoraSpacing[24],
+  },
+  logo: {
+    marginTop: 18,
+    marginBottom: PathoraSpacing[24],
+  },
+  hero: {
+    width: '100%',
+    height: 150,
+    borderRadius: PathoraRadius[20],
+    marginBottom: 26,
+    overflow: 'hidden',
+  },
+  heroCircleAmber: {
+    position: 'absolute',
+    top: -18,
+    right: -18,
+    width: 70,
+    height: 70,
+    borderRadius: PathoraRadius[999],
+    backgroundColor: PathoraColors.amber500,
+  },
+  heroCircleSoftLower: {
+    position: 'absolute',
+    bottom: -12,
+    left: -10,
+    width: 40,
+    height: 40,
+    borderRadius: PathoraRadius[999],
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  heroCircleSoftRight: {
+    position: 'absolute',
+    bottom: 18,
+    right: 56,
+    width: 18,
+    height: 18,
+    borderRadius: PathoraRadius[999],
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   title: {
-    textAlign: 'center',
+    fontFamily: PathoraFonts.en.extraBold,
+    fontSize: 24,
+    lineHeight: 29,
+    color: PathoraColors.ink900,
+    marginBottom: 10,
   },
-  code: {
-    textTransform: 'uppercase',
+  subtitle: {
+    fontFamily: PathoraFonts.en.regular,
+    fontSize: 14,
+    lineHeight: 22,
+    color: PathoraColors.textSecondary,
+    marginBottom: 26,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  primaryButton: {
+    marginBottom: 10,
   },
 });
