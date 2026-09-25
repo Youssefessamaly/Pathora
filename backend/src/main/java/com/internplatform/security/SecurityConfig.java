@@ -32,12 +32,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         .requestMatchers(
-                                "/api/v1/auth/register/intern",
-                                "/api/v1/auth/register/company",
-                                "/api/v1/auth/login",
-                                "/actuator/health",
-                                "/actuator/info"
-                        ).permitAll()
+                            "/api/v1/auth/register/intern",
+                            "/api/v1/auth/register/company",
+                            "/api/v1/auth/login",
+                            "/api/v1/auth/forgot-password",
+                            "/actuator/health",
+                            "/actuator/info"
+                    ).permitAll()
 
                         .requestMatchers("/api/v1/intern/**")
                         .hasRole("INTERN")
