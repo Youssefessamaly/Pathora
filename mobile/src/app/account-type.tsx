@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,12 +7,14 @@ import { AuthBackButton } from '@/components/auth-back-button';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 
 export default function AccountTypeScreen() {
+  const router = useRouter();
+
   const handleStudent = () => {
-    // TODO: continue student sign up once that flow is implemented
+    router.push('/register/student');
   };
 
   const handleCompany = () => {
-    // TODO: continue company sign up once that flow is implemented
+    router.push('/register/company');
   };
 
   return (

@@ -9,18 +9,28 @@ export type PathoraButtonProps = {
   onPress?: (event: GestureResponderEvent) => void;
   variant?: PathoraButtonVariant;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 };
 
-export function PathoraButton({ label, onPress, variant = 'primary', style }: PathoraButtonProps) {
+export function PathoraButton({
+  label,
+  onPress,
+  variant = 'primary',
+  style,
+  disabled = false,
+}: PathoraButtonProps) {
   const isPrimary = variant === 'primary';
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
+      accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.base,
         isPrimary ? styles.primary : styles.secondary,
-        pressed && styles.pressed,
+        pressed && !disabled && styles.pressed,
+        disabled && styles.disabled,
         style,
       ]}>
       <Text style={[styles.label, isPrimary ? styles.labelPrimary : styles.labelSecondary]}>
@@ -48,6 +58,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  disabled: {
+    opacity: 0.5,
   },
   label: {
     fontFamily: PathoraFonts.en.bold,
