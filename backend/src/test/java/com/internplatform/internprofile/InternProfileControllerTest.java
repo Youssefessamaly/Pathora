@@ -5,19 +5,27 @@ import com.internplatform.user.User;
 import com.internplatform.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.Year;
 import java.util.HashMap;
@@ -30,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +48,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 class InternProfileControllerTest {
+
+    @TempDir
+    static Path cvStorageDir;
+
+    @DynamicPropertySource
+    static void overrideCvStorageDirectory(DynamicPropertyRegistry registry) {
+        registry.add("app.cv-storage.directory", () -> cvStorageDir.toString());
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -174,6 +191,37 @@ class InternProfileControllerTest {
         assertThat(internProfileRepository.findByUserId(internUser.getId())).isEmpty();
     }
 
+    /**
+     * Regression test for a LazyInitializationException on GET /intern/profile: the class-level
+     * {@code @Transactional} normally keeps one Hibernate session open for the whole test, which
+     * would mask this bug (each mockMvc.perform() call would just join that same session). Running
+     * this one test non-transactionally forces each request to open and close its own transaction,
+     * exactly like real request handling, so the fetch-then-detach bug actually reproduces without
+     * the fix in InternProfileService.getProfile(). The intern user this test creates is cleaned up
+     * explicitly since it is not covered by the usual test-transaction rollback.
+     */
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void getProfileWithSkillsDoesNotThrowLazyInitializationException() throws Exception {
+        try {
+            Skill skill = skillRepository.findAllByOrderByNameAsc().get(0);
+
+            mockMvc.perform(patch("/api/v1/intern/profile")
+                            .with(asIntern())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(toJson(Map.of("skillIds", List.of(skill.getId().toString())))))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(get("/api/v1/intern/profile").with(asIntern()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.skills", hasSize(1)))
+                    .andExpect(jsonPath("$.skills[0].id").value(skill.getId().toString()))
+                    .andExpect(jsonPath("$.skills[0].name").value(skill.getName()));
+        } finally {
+            userRepository.delete(internUser);
+        }
+    }
+
     @Test
     void skillsEndpointReturnsSeededCatalogSortedByName() throws Exception {
         mockMvc.perform(get("/api/v1/intern/skills").with(asIntern()))
@@ -263,6 +311,152 @@ class InternProfileControllerTest {
 
         assertThat(secondResponse.createdAt()).isEqualTo(firstResponse.createdAt());
         assertThat(secondResponse.updatedAt()).isAfter(firstResponse.updatedAt());
+    }
+
+    private static byte[] validPdfBytes() {
+        return "%PDF-1.4\nFake minimal PDF content for tests\n%%EOF".getBytes(StandardCharsets.US_ASCII);
+    }
+
+    @Test
+    void internUploadsValidPdfSuccessfully() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] pdf = validPdfBytes();
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fileName").value("resume.pdf"))
+                .andExpect(jsonPath("$.contentType").value("application/pdf"))
+                .andExpect(jsonPath("$.sizeBytes").value(pdf.length))
+                .andExpect(jsonPath("$.uploadedAt").exists())
+                .andExpect(jsonPath("$.storageKey").doesNotExist())
+                .andExpect(jsonPath("$.filePath").doesNotExist());
+    }
+
+    @Test
+    void profileReflectsUploadedCvMetadata() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", validPdfBytes()))
+                        .with(asIntern()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/intern/profile").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cvFileName").value("resume.pdf"))
+                .andExpect(jsonPath("$.cvUploadedAt").exists());
+    }
+
+    @Test
+    void emptyCvFileRejected() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", new byte[0]))
+                        .with(asIntern()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void nonPdfContentTypeRejected() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile(
+                                "file", "resume.txt", "text/plain", "hello world".getBytes(StandardCharsets.UTF_8)))
+                        .with(asIntern()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void fakePdfWithWrongSignatureRejected() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile(
+                                "file", "resume.pdf", "application/pdf", "not a real pdf".getBytes(StandardCharsets.UTF_8)))
+                        .with(asIntern()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void fileOverSizeLimitRejected() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] oversized = new byte[(5 * 1024 * 1024) + (512 * 1024)];
+        byte[] signature = "%PDF-1.4".getBytes(StandardCharsets.US_ASCII);
+        System.arraycopy(signature, 0, oversized, 0, signature.length);
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", oversized))
+                        .with(asIntern()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void companyForbiddenFromUploadingCv() throws Exception {
+        User companyUser = userRepository.saveAndFlush(
+                new User(
+                        "company-" + UUID.randomUUID() + "@example.test",
+                        passwordEncoder.encode("Password123!"),
+                        Role.COMPANY
+                )
+        );
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", validPdfBytes()))
+                        .with(asUser(companyUser)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void uploadWithoutExistingProfileReturns404() throws Exception {
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", validPdfBytes()))
+                        .with(asIntern()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void replacingCvUpdatesMetadataSafely() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "old-resume.pdf", "application/pdf", validPdfBytes()))
+                        .with(asIntern()))
+                .andExpect(status().isOk());
+
+        String firstStorageKey = internProfileRepository
+                .findByUserId(internUser.getId())
+                .orElseThrow()
+                .getCvStorageKey();
+        assertThat(firstStorageKey).isNotNull();
+
+        byte[] newPdf = "%PDF-1.4\nDifferent content\n%%EOF".getBytes(StandardCharsets.US_ASCII);
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "new-resume.pdf", "application/pdf", newPdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fileName").value("new-resume.pdf"))
+                .andExpect(jsonPath("$.sizeBytes").value(newPdf.length));
+
+        InternProfile updated = internProfileRepository.findByUserId(internUser.getId()).orElseThrow();
+        assertThat(updated.getCvOriginalFilename()).isEqualTo("new-resume.pdf");
+        assertThat(updated.getCvStorageKey()).isNotNull().isNotEqualTo(firstStorageKey);
+    }
+
+    @Test
+    void onboardingCompletesWithoutCv() throws Exception {
+        UUID skillId = skillRepository.findAllByOrderByNameAsc().get(0).getId();
+        patchProfile(completeOnboardingFields(skillId));
+
+        mockMvc.perform(post("/api/v1/intern/profile/complete").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.onboardingCompleted").value(true));
     }
 
     @Test

@@ -66,6 +66,21 @@ public class InternProfile {
     @Column(name = "onboarding_completed_at")
     private OffsetDateTime onboardingCompletedAt;
 
+    @Column(name = "cv_original_filename", length = 255)
+    private String cvOriginalFilename;
+
+    @Column(name = "cv_storage_key", length = 255)
+    private String cvStorageKey;
+
+    @Column(name = "cv_content_type", length = 100)
+    private String cvContentType;
+
+    @Column(name = "cv_size_bytes")
+    private Integer cvSizeBytes;
+
+    @Column(name = "cv_uploaded_at")
+    private OffsetDateTime cvUploadedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -206,6 +221,46 @@ public class InternProfile {
 
     public void setOnboardingCompletedAt(OffsetDateTime onboardingCompletedAt) {
         this.onboardingCompletedAt = onboardingCompletedAt;
+    }
+
+    public String getCvOriginalFilename() {
+        return cvOriginalFilename;
+    }
+
+    public void setCvOriginalFilename(String cvOriginalFilename) {
+        this.cvOriginalFilename = cvOriginalFilename;
+    }
+
+    public String getCvStorageKey() {
+        return cvStorageKey;
+    }
+
+    public void setCvStorageKey(String cvStorageKey) {
+        this.cvStorageKey = cvStorageKey;
+    }
+
+    public String getCvContentType() {
+        return cvContentType;
+    }
+
+    public void setCvContentType(String cvContentType) {
+        this.cvContentType = cvContentType;
+    }
+
+    public Integer getCvSizeBytes() {
+        return cvSizeBytes;
+    }
+
+    public void setCvSizeBytes(Integer cvSizeBytes) {
+        this.cvSizeBytes = cvSizeBytes;
+    }
+
+    public OffsetDateTime getCvUploadedAt() {
+        return cvUploadedAt;
+    }
+
+    public void setCvUploadedAt(OffsetDateTime cvUploadedAt) {
+        this.cvUploadedAt = cvUploadedAt;
     }
 
     public OffsetDateTime getCreatedAt() {

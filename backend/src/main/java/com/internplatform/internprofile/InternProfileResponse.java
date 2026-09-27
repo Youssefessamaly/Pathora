@@ -21,6 +21,8 @@ public record InternProfileResponse(
         String careerInterests,
         String linkedinUrl,
         boolean onboardingCompleted,
+        String cvFileName,
+        OffsetDateTime cvUploadedAt,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

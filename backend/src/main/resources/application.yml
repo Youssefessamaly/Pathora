@@ -26,6 +26,11 @@ spring:
           starttls:
             enable: false
 
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
+
 server:
   port: 8080
 
@@ -43,3 +48,5 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-seconds: 3600
+  cv-storage:
+    directory: ${CV_STORAGE_DIR:./data/cv-storage}

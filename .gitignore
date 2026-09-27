@@ -3,6 +3,7 @@ infrastructure/.env
 
 # Java / Maven
 backend/target/
+backend/data/
 *.log
 
 # IntelliJ IDEA
