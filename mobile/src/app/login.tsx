@@ -1,24 +1,57 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
+import { ApiError, getCurrentUser, login, NetworkError } from '@/lib/api';
+import { storeAccessToken } from '@/lib/auth-token';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const isEmailValid = EMAIL_PATTERN.test(email);
+  const isPasswordValid = password.length > 0;
+  const canSubmit = isEmailValid && isPasswordValid;
 
   const handleForgotPassword = () => {
     // TODO: navigate to forgot-password flow once it exists
   };
 
-  const handleLogin = () => {
-    // TODO: call the auth API once it is implemented
+  const handleLogin = async () => {
+    if (!canSubmit || isSubmitting) {
+      return;
+    }
+
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      const session = await login({ email: email.trim(), password });
+      await storeAccessToken(session.accessToken);
+
+      const currentUser = await getCurrentUser(session.accessToken);
+      Alert.alert('Success', `Logged in successfully as ${currentUser.role}`);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setSubmitError(error.status === 401 ? 'Invalid email or password.' : error.message);
+      } else if (error instanceof NetworkError) {
+        setSubmitError('Unable to reach Pathora. Please try again.');
+      } else {
+        setSubmitError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSignUp = () => {
@@ -65,10 +98,13 @@ export default function LoginScreen() {
           </View>
         </View>
 
+        {submitError && <Text style={styles.submitError}>{submitError}</Text>}
+
         <PathoraButton
-          label="Log in"
+          label={isSubmitting ? 'Logging in…' : 'Log in'}
           variant="primary"
           onPress={handleLogin}
+          disabled={!canSubmit || isSubmitting}
           style={styles.loginButton}
         />
 
@@ -122,6 +158,12 @@ const styles = StyleSheet.create({
     fontFamily: PathoraFonts.en.semiBold,
     fontSize: 13,
     color: PathoraColors.teal600,
+  },
+  submitError: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 13,
+    color: PathoraColors.error,
+    marginBottom: PathoraSpacing[16],
   },
   loginButton: {
     marginBottom: PathoraSpacing[24],

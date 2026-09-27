@@ -48,22 +48,34 @@ function friendlyMessageForStatus(status: number): string {
   }
 }
 
-/**
- * POSTs JSON to the API and parses a JSON response.
- * Throws NetworkError on connection failure, ApiError on a non-2xx response.
- */
-export async function apiPost<TResponse>(path: string, body: unknown): Promise<TResponse> {
+type RequestOptions = {
+  /** Bearer token for authenticated requests. Never logged. */
+  token?: string;
+};
+
+async function request<TResponse>(
+  method: 'GET' | 'POST',
+  path: string,
+  body: unknown,
+  options?: RequestOptions,
+): Promise<TResponse> {
   const url = `${getBaseUrl()}${path}`;
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (options?.token) {
+    headers.Authorization = `Bearer ${options.token}`;
+  }
 
   let response: Response;
   try {
     response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(body),
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new NetworkError();
@@ -83,6 +95,22 @@ export async function apiPost<TResponse>(path: string, body: unknown): Promise<T
   } catch {
     throw new ApiError(response.status, 'Received an unexpected response from the server.');
   }
+}
+
+/**
+ * POSTs JSON to the API and parses a JSON response.
+ * Throws NetworkError on connection failure, ApiError on a non-2xx response.
+ */
+export function apiPost<TResponse>(path: string, body: unknown, options?: RequestOptions): Promise<TResponse> {
+  return request<TResponse>('POST', path, body, options);
+}
+
+/**
+ * GETs JSON from the API, optionally with a bearer token, and parses a JSON response.
+ * Throws NetworkError on connection failure, ApiError on a non-2xx response.
+ */
+export function apiGet<TResponse>(path: string, options?: RequestOptions): Promise<TResponse> {
+  return request<TResponse>('GET', path, undefined, options);
 }
 
 export type UserRole = 'INTERN' | 'COMPANY' | 'ADMIN';
@@ -106,4 +134,31 @@ export function registerIntern(payload: RegisterPayload): Promise<RegisterRespon
 
 export function registerCompany(payload: RegisterPayload): Promise<RegisterResponse> {
   return apiPost<RegisterResponse>('/auth/register/company', payload);
+}
+
+export type LoginPayload = {
+  email: string;
+  password: string;
+};
+
+export type LoginResponse = {
+  accessToken: string;
+  tokenType: string;
+  userId: string;
+  email: string;
+  role: UserRole;
+};
+
+export type CurrentUserResponse = {
+  userId: string;
+  email: string;
+  role: UserRole;
+};
+
+export function login(payload: LoginPayload): Promise<LoginResponse> {
+  return apiPost<LoginResponse>('/auth/login', payload);
+}
+
+export function getCurrentUser(token: string): Promise<CurrentUserResponse> {
+  return apiGet<CurrentUserResponse>('/auth/me', { token });
 }
