@@ -8,7 +8,9 @@ import { PathoraButton } from '@/components/pathora-button';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { ApiError, NetworkError } from '@/lib/api';
+import { ApiError, getInternProfileOrNull, NetworkError } from '@/lib/api';
+import { getAccessToken } from '@/lib/auth-token';
+import { resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -38,6 +40,24 @@ export default function LoginScreen() {
 
     try {
       const currentUser = await signIn({ email: email.trim(), password });
+
+      if (currentUser.role === 'INTERN') {
+        try {
+          const token = await getAccessToken();
+          if (token) {
+            const profile = await getInternProfileOrNull(token);
+            const nextOnboardingRoute = resolveFirstIncompleteOnboardingStep(profile);
+            if (nextOnboardingRoute) {
+              router.replace(nextOnboardingRoute);
+              return;
+            }
+          }
+        } catch {
+          // Couldn't determine onboarding status right now (e.g. network hiccup) —
+          // fall back to the existing successful-login behavior below.
+        }
+      }
+
       Alert.alert('Success', `Logged in successfully as ${currentUser.role}`);
     } catch (error) {
       if (error instanceof ApiError) {

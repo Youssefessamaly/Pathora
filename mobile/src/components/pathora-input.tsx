@@ -1,6 +1,15 @@
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+} from 'react-native';
 
 import { PathoraColors, PathoraFonts, PathoraRadius } from '@/constants/pathora-theme';
 
@@ -14,6 +23,9 @@ export type PathoraInputProps = {
   autoComplete?: TextInputProps['autoComplete'];
   textContentType?: TextInputProps['textContentType'];
   secureTextEntry?: boolean;
+  multiline?: boolean;
+  numberOfLines?: number;
+  style?: StyleProp<ViewStyle>;
 };
 
 export function PathoraInput({
@@ -26,16 +38,24 @@ export function PathoraInput({
   autoComplete,
   textContentType,
   secureTextEntry = false,
+  multiline = false,
+  numberOfLines,
+  style,
 }: PathoraInputProps) {
   const [focused, setFocused] = useState(false);
   const [visible, setVisible] = useState(false);
 
   return (
-    <View style={styles.wrapper}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={[styles.inputContainer, focused && styles.inputContainerFocused]}>
+    <View style={[styles.wrapper, style]}>
+      {label.length > 0 && <Text style={styles.label}>{label}</Text>}
+      <View
+        style={[
+          styles.inputContainer,
+          multiline && styles.inputContainerMultiline,
+          focused && styles.inputContainerFocused,
+        ]}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, multiline && styles.inputMultiline]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -45,6 +65,9 @@ export function PathoraInput({
           autoComplete={autoComplete}
           textContentType={textContentType}
           secureTextEntry={secureTextEntry && !visible}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          textAlignVertical={multiline ? 'top' : undefined}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
@@ -90,6 +113,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
+  inputContainerMultiline: {
+    alignItems: 'flex-start',
+    minHeight: 96,
+  },
   inputContainerFocused: {
     borderColor: PathoraColors.teal500,
   },
@@ -99,5 +126,8 @@ const styles = StyleSheet.create({
     fontFamily: PathoraFonts.en.regular,
     fontSize: 14.5,
     color: PathoraColors.ink900,
+  },
+  inputMultiline: {
+    minHeight: 70,
   },
 });
