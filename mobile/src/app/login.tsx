@@ -7,13 +7,14 @@ import { AuthBackButton } from '@/components/auth-back-button';
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
-import { ApiError, getCurrentUser, login, NetworkError } from '@/lib/api';
-import { storeAccessToken } from '@/lib/auth-token';
+import { useAuth } from '@/context/auth-context';
+import { ApiError, NetworkError } from '@/lib/api';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,10 +37,7 @@ export default function LoginScreen() {
     setIsSubmitting(true);
 
     try {
-      const session = await login({ email: email.trim(), password });
-      await storeAccessToken(session.accessToken);
-
-      const currentUser = await getCurrentUser(session.accessToken);
+      const currentUser = await signIn({ email: email.trim(), password });
       Alert.alert('Success', `Logged in successfully as ${currentUser.role}`);
     } catch (error) {
       if (error instanceof ApiError) {

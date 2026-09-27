@@ -19,6 +19,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { PathoraColors } from '@/constants/pathora-theme';
+import { AuthProvider, useAuth } from '@/context/auth-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,13 +41,24 @@ export default function RootLayout() {
 
   const fontsReady = plusJakartaSansLoaded && cairoLoaded;
 
+  return (
+    <AuthProvider>
+      <RootNavigator fontsReady={fontsReady} />
+    </AuthProvider>
+  );
+}
+
+function RootNavigator({ fontsReady }: { fontsReady: boolean }) {
+  const { isInitializing } = useAuth();
+  const isReady = fontsReady && !isInitializing;
+
   useEffect(() => {
-    if (fontsReady) {
+    if (isReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsReady]);
+  }, [isReady]);
 
-  if (!fontsReady) {
+  if (!isReady) {
     return null;
   }
 
