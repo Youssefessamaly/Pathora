@@ -24,7 +24,7 @@ export default function LoginScreen() {
   const canSubmit = isEmailValid && isPasswordValid;
 
   const handleForgotPassword = () => {
-    // TODO: navigate to forgot-password flow once it exists
+    router.push('/forgot-password');
   };
 
   const handleLogin = async () => {

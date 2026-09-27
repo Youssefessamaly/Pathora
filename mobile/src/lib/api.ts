@@ -162,3 +162,42 @@ export function login(payload: LoginPayload): Promise<LoginResponse> {
 export function getCurrentUser(token: string): Promise<CurrentUserResponse> {
   return apiGet<CurrentUserResponse>('/auth/me', { token });
 }
+
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ForgotPasswordResponse = {
+  message: string;
+};
+
+export type VerifyOtpPayload = {
+  email: string;
+  code: string;
+};
+
+export type VerifyOtpResponse = {
+  resetToken: string;
+  expiresAt: string;
+};
+
+export type ResetPasswordPayload = {
+  resetToken: string;
+  newPassword: string;
+};
+
+export type ResetPasswordResponse = {
+  message: string;
+};
+
+export function forgotPassword(payload: ForgotPasswordPayload): Promise<ForgotPasswordResponse> {
+  return apiPost<ForgotPasswordResponse>('/auth/forgot-password', payload);
+}
+
+export function verifyOtp(payload: VerifyOtpPayload): Promise<VerifyOtpResponse> {
+  return apiPost<VerifyOtpResponse>('/auth/verify-otp', payload);
+}
+
+export function resetPassword(payload: ResetPasswordPayload): Promise<ResetPasswordResponse> {
+  return apiPost<ResetPasswordResponse>('/auth/reset-password', payload);
+}
