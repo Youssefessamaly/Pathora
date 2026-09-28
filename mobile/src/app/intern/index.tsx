@@ -1,0 +1,127 @@
+import { useRouter } from 'expo-router';
+import { useEffect, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { PathoraButton } from '@/components/pathora-button';
+import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
+import { useAuth } from '@/context/auth-context';
+
+/**
+ * Client-side gate for the intern home: requires an authenticated INTERN session.
+ * The backend independently enforces this on every request regardless of this guard.
+ */
+function InternHomeGuard({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const { isAuthenticated, isInitializing, user } = useAuth();
+  const isIntern = user?.role === 'INTERN';
+
+  useEffect(() => {
+    if (isInitializing) {
+      return;
+    }
+    if (!isAuthenticated || !isIntern) {
+      router.replace('/login');
+    }
+  }, [isInitializing, isAuthenticated, isIntern, router]);
+
+  if (isInitializing || !isAuthenticated || !isIntern) {
+    return <View style={styles.guardFallback} />;
+  }
+
+  return <>{children}</>;
+}
+
+function InternHomeScreen() {
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/login');
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>Welcome back</Text>
+        <Text style={styles.subtitle}>{user?.email}</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Your Pathora home</Text>
+          <Text style={styles.cardBody}>
+            Your dashboard is being built. Check back soon to track applications and discover new
+            internships.
+          </Text>
+        </View>
+
+        <PathoraButton
+          label="Log out"
+          variant="secondary"
+          onPress={handleSignOut}
+          style={styles.signOutButton}
+        />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+export default function InternHomeRoute() {
+  return (
+    <InternHomeGuard>
+      <InternHomeScreen />
+    </InternHomeGuard>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: PathoraColors.paper,
+  },
+  guardFallback: {
+    flex: 1,
+    backgroundColor: PathoraColors.paper,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: PathoraSpacing[24],
+    paddingTop: PathoraSpacing[16],
+  },
+  title: {
+    fontFamily: PathoraFonts.en.extraBold,
+    fontSize: 24,
+    color: PathoraColors.ink900,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontFamily: PathoraFonts.en.regular,
+    fontSize: 14,
+    color: PathoraColors.textSecondary,
+    marginBottom: PathoraSpacing[32],
+  },
+  card: {
+    borderRadius: PathoraRadius[14],
+    backgroundColor: PathoraColors.surface,
+    borderWidth: 1,
+    borderColor: PathoraColors.border,
+    paddingVertical: PathoraSpacing[20],
+    paddingHorizontal: PathoraSpacing[16],
+    marginBottom: PathoraSpacing[32],
+  },
+  cardTitle: {
+    fontFamily: PathoraFonts.en.bold,
+    fontSize: 15,
+    color: PathoraColors.ink900,
+    marginBottom: 8,
+  },
+  cardBody: {
+    fontFamily: PathoraFonts.en.regular,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: PathoraColors.textSecondary,
+  },
+  signOutButton: {
+    marginBottom: PathoraSpacing[24],
+  },
+});

@@ -44,18 +44,19 @@ export default function LoginScreen() {
       if (currentUser.role === 'INTERN') {
         try {
           const token = await getAccessToken();
-          if (token) {
-            const profile = await getInternProfileOrNull(token);
-            const nextOnboardingRoute = resolveFirstIncompleteOnboardingStep(profile);
-            if (nextOnboardingRoute) {
-              router.replace(nextOnboardingRoute);
-              return;
-            }
+          if (!token) {
+            throw new Error('Missing access token after sign-in');
           }
+          const profile = await getInternProfileOrNull(token);
+          const nextOnboardingRoute = resolveFirstIncompleteOnboardingStep(profile);
+          router.replace(nextOnboardingRoute ?? '/intern');
         } catch {
-          // Couldn't determine onboarding status right now (e.g. network hiccup) —
-          // fall back to the existing successful-login behavior below.
+          // Signed in, but couldn't determine onboarding status (e.g. network hiccup) —
+          // don't guess where to send them. Stay on login rather than risk skipping
+          // onboarding.
+          setSubmitError('Unable to load your profile. Please try again.');
         }
+        return;
       }
 
       Alert.alert('Success', `Logged in successfully as ${currentUser.role}`);
