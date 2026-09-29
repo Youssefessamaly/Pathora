@@ -1,6 +1,11 @@
-import { ApiError, NetworkError, type InternProfile } from '@/lib/api';
+import { ApiError, NetworkError, type CompanyProfile, type InternProfile } from '@/lib/api';
 
 export type OnboardingRoute = '/onboarding/personal' | '/onboarding/education' | '/onboarding/skills';
+
+export type CompanyOnboardingRoute =
+  | '/company/onboarding/company'
+  | '/company/onboarding/details'
+  | '/company/onboarding/contact';
 
 function isStep1Incomplete(profile: InternProfile): boolean {
   return !profile.firstName || !profile.lastName || !profile.dateOfBirth || !profile.phoneNumber;
@@ -57,6 +62,50 @@ export function resolveFirstIncompleteOnboardingStep(profile: InternProfile | nu
   // All individual step checks passed but the backend hasn't marked onboarding
   // complete yet (e.g. the user never pressed Finish) — land on the last step.
   return '/onboarding/skills';
+}
+
+function isCompanyStep1Incomplete(profile: CompanyProfile): boolean {
+  return !profile.companyName || !profile.industry || !profile.companySize;
+}
+
+function isCompanyStep2Incomplete(profile: CompanyProfile): boolean {
+  return !profile.location || !profile.description;
+}
+
+function isCompanyStep3Incomplete(profile: CompanyProfile): boolean {
+  return !profile.contactName || !profile.contactPhone;
+}
+
+/**
+ * Given the current company profile (or null if onboarding hasn't started), returns the
+ * route for the first incomplete onboarding step, or null if onboarding is already complete.
+ */
+export function resolveFirstIncompleteCompanyOnboardingStep(
+  profile: CompanyProfile | null,
+): CompanyOnboardingRoute | null {
+  if (!profile) {
+    return '/company/onboarding/company';
+  }
+
+  if (profile.onboardingCompleted) {
+    return null;
+  }
+
+  if (isCompanyStep1Incomplete(profile)) {
+    return '/company/onboarding/company';
+  }
+
+  if (isCompanyStep2Incomplete(profile)) {
+    return '/company/onboarding/details';
+  }
+
+  if (isCompanyStep3Incomplete(profile)) {
+    return '/company/onboarding/contact';
+  }
+
+  // All individual step checks passed but the backend hasn't marked onboarding
+  // complete yet (e.g. the user never pressed Finish) — land on the last step.
+  return '/company/onboarding/contact';
 }
 
 export function describeOnboardingError(error: unknown): string {

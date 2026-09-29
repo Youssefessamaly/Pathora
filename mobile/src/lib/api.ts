@@ -343,3 +343,66 @@ export function uploadInternCv(token: string, file: CvFileToUpload): Promise<CvU
 
   return apiPostForm<CvUploadResponse>('/intern/profile/cv', formData, { token });
 }
+
+export type CompanyProfile = {
+  id: string;
+  userId: string;
+  companyName: string | null;
+  industry: string | null;
+  companySize: string | null;
+  location: string | null;
+  website: string | null;
+  description: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  onboardingCompleted: boolean;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * Partial update payload for PATCH /company/profile.
+ * Matching the backend's PATCH semantics: only include the fields you want to change.
+ * Omitted fields are left untouched server-side.
+ */
+export type CompanyProfileUpdatePayload = Partial<{
+  companyName: string;
+  industry: string;
+  companySize: string;
+  location: string;
+  website: string;
+  description: string;
+  contactName: string;
+  contactPhone: string;
+}>;
+
+export function getCompanyProfile(token: string): Promise<CompanyProfile> {
+  return apiGet<CompanyProfile>('/company/profile', { token });
+}
+
+/**
+ * Same as getCompanyProfile, but treats a 404 ("no profile started yet") as `null`
+ * instead of throwing, since that is an expected, normal state for this endpoint.
+ */
+export async function getCompanyProfileOrNull(token: string): Promise<CompanyProfile | null> {
+  try {
+    return await getCompanyProfile(token);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function updateCompanyProfile(
+  token: string,
+  payload: CompanyProfileUpdatePayload,
+): Promise<CompanyProfile> {
+  return apiPatch<CompanyProfile>('/company/profile', payload, { token });
+}
+
+export function completeCompanyOnboarding(token: string): Promise<CompanyProfile> {
+  return apiPost<CompanyProfile>('/company/profile/complete', undefined, { token });
+}

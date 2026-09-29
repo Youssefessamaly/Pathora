@@ -8,9 +8,12 @@ import { PathoraButton } from '@/components/pathora-button';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { ApiError, getInternProfileOrNull, NetworkError } from '@/lib/api';
+import { ApiError, getCompanyProfileOrNull, getInternProfileOrNull, NetworkError } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth-token';
-import { resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
+import {
+  resolveFirstIncompleteCompanyOnboardingStep,
+  resolveFirstIncompleteOnboardingStep,
+} from '@/lib/onboarding';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -55,6 +58,24 @@ export default function LoginScreen() {
           // don't guess where to send them. Stay on login rather than risk skipping
           // onboarding.
           setSubmitError('Unable to load your profile. Please try again.');
+        }
+        return;
+      }
+
+      if (currentUser.role === 'COMPANY') {
+        try {
+          const token = await getAccessToken();
+          if (!token) {
+            throw new Error('Missing access token after sign-in');
+          }
+          const profile = await getCompanyProfileOrNull(token);
+          const nextOnboardingRoute = resolveFirstIncompleteCompanyOnboardingStep(profile);
+          router.replace(nextOnboardingRoute ?? '/company');
+        } catch {
+          // Signed in, but couldn't determine onboarding status (e.g. network hiccup) —
+          // don't guess where to send them. Stay on login rather than risk skipping
+          // onboarding.
+          setSubmitError('Unable to load your company profile. Please try again.');
         }
         return;
       }

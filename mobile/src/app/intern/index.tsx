@@ -20,10 +20,16 @@ function InternHomeGuard({ children }: { children: ReactNode }) {
     if (isInitializing) {
       return;
     }
-    if (!isAuthenticated || !isIntern) {
+    if (!isAuthenticated) {
       router.replace('/login');
+      return;
     }
-  }, [isInitializing, isAuthenticated, isIntern, router]);
+    if (!isIntern) {
+      // Signed in, but as the wrong role — send them to their own home instead of
+      // bouncing an already-authenticated user back to the login screen.
+      router.replace(user?.role === 'COMPANY' ? '/company' : '/login');
+    }
+  }, [isInitializing, isAuthenticated, isIntern, user?.role, router]);
 
   if (isInitializing || !isAuthenticated || !isIntern) {
     return <View style={styles.guardFallback} />;
