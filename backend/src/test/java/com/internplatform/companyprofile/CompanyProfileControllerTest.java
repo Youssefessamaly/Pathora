@@ -136,6 +136,8 @@ class CompanyProfileControllerTest {
 
     @Test
     void patchUpdatesExistingProfileAndPreservesOmittedFields() throws Exception {
+        long initialCount = companyProfileRepository.count();
+
         patchProfile(Map.of(
                 "companyName", "Pathora Technologies",
                 "industry", "Software"
@@ -149,7 +151,7 @@ class CompanyProfileControllerTest {
                 .andExpect(jsonPath("$.companyName").value("Pathora Technologies"))
                 .andExpect(jsonPath("$.industry").value("Fintech"));
 
-        assertThat(companyProfileRepository.count()).isEqualTo(1);
+        assertThat(companyProfileRepository.count()).isEqualTo(initialCount + 1);
     }
 
     @Test

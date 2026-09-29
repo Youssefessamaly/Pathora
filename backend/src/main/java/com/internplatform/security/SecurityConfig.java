@@ -44,6 +44,12 @@ public class SecurityConfig {
                         "/actuator/health",
                         "/actuator/info"
                 ).permitAll()
+                        // The skill catalog is a shared, non-sensitive reference list also needed
+                        // when a COMPANY selects required skills for an internship — carve it out
+                        // of the otherwise INTERN-only /api/v1/intern/** namespace.
+                        .requestMatchers("/api/v1/intern/skills")
+                        .hasAnyRole("INTERN", "COMPANY")
+
                         .requestMatchers("/api/v1/intern/**")
                         .hasRole("INTERN")
 

@@ -239,6 +239,21 @@ class InternProfileControllerTest {
     }
 
     @Test
+    void companyCanAlsoAccessSkillsEndpoint() throws Exception {
+        User companyUser = userRepository.saveAndFlush(
+                new User(
+                        "company-" + UUID.randomUUID() + "@example.test",
+                        passwordEncoder.encode("Password123!"),
+                        Role.COMPANY
+                )
+        );
+
+        mockMvc.perform(get("/api/v1/intern/skills").with(asUser(companyUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(12)));
+    }
+
+    @Test
     void patchWithUnknownSkillIdReturns400() throws Exception {
         Map<String, Object> body = Map.of("skillIds", List.of(UUID.randomUUID().toString()));
 

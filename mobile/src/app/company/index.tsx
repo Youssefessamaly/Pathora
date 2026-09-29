@@ -56,10 +56,24 @@ function CompanyHomeScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Your Pathora company home</Text>
           <Text style={styles.cardBody}>
-            Your dashboard is being built. Check back soon to post internships and manage
-            applicants.
+            Post internships and manage your listings here. More of your dashboard is on the
+            way.
           </Text>
         </View>
+
+        <PathoraButton
+          label="Post internship"
+          variant="primary"
+          onPress={() => router.push('/company/internships/new')}
+          style={styles.actionButton}
+        />
+
+        <PathoraButton
+          label="Manage internships"
+          variant="secondary"
+          onPress={() => router.push('/company/internships')}
+          style={styles.actionButton}
+        />
 
         <PathoraButton
           label="Log out"
@@ -127,7 +141,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: PathoraColors.textSecondary,
   },
+  actionButton: {
+    marginBottom: PathoraSpacing[16],
+  },
   signOutButton: {
+    marginTop: PathoraSpacing[8],
     marginBottom: PathoraSpacing[24],
   },
 });

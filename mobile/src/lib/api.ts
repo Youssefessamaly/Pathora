@@ -406,3 +406,77 @@ export function updateCompanyProfile(
 export function completeCompanyOnboarding(token: string): Promise<CompanyProfile> {
   return apiPost<CompanyProfile>('/company/profile/complete', undefined, { token });
 }
+
+export type InternshipWorkMode = 'ONSITE' | 'HYBRID' | 'REMOTE';
+export type InternshipStatus = 'OPEN' | 'CLOSED';
+
+export type CompanyInternship = {
+  id: string;
+  companyName: string;
+  title: string;
+  description: string;
+  location: string;
+  workMode: InternshipWorkMode;
+  applicationDeadline: string;
+  startDate: string | null;
+  durationMonths: number | null;
+  status: InternshipStatus;
+  skills: InternProfileSkill[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CompanyInternshipCreatePayload = {
+  title: string;
+  description: string;
+  location: string;
+  workMode: InternshipWorkMode;
+  applicationDeadline: string;
+  startDate?: string;
+  durationMonths?: number;
+  skillIds: string[];
+};
+
+/**
+ * Partial update payload for PATCH /company/internships/{id}.
+ * Matching the backend's PATCH semantics: only include the fields you want to change.
+ * Omitted fields are left untouched server-side; skillIds, when included, fully replaces
+ * the internship's skill set.
+ */
+export type CompanyInternshipUpdatePayload = Partial<{
+  title: string;
+  description: string;
+  location: string;
+  workMode: InternshipWorkMode;
+  applicationDeadline: string;
+  startDate: string;
+  durationMonths: number;
+  skillIds: string[];
+}>;
+
+export function createCompanyInternship(
+  token: string,
+  payload: CompanyInternshipCreatePayload,
+): Promise<CompanyInternship> {
+  return apiPost<CompanyInternship>('/company/internships', payload, { token });
+}
+
+export function getCompanyInternships(token: string): Promise<CompanyInternship[]> {
+  return apiGet<CompanyInternship[]>('/company/internships', { token });
+}
+
+export function getCompanyInternship(token: string, internshipId: string): Promise<CompanyInternship> {
+  return apiGet<CompanyInternship>(`/company/internships/${internshipId}`, { token });
+}
+
+export function updateCompanyInternship(
+  token: string,
+  internshipId: string,
+  payload: CompanyInternshipUpdatePayload,
+): Promise<CompanyInternship> {
+  return apiPatch<CompanyInternship>(`/company/internships/${internshipId}`, payload, { token });
+}
+
+export function closeCompanyInternship(token: string, internshipId: string): Promise<CompanyInternship> {
+  return apiPost<CompanyInternship>(`/company/internships/${internshipId}/close`, undefined, { token });
+}
