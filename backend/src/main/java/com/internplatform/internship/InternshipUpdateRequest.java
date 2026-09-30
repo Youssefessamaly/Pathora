@@ -36,7 +36,10 @@ public record InternshipUpdateRequest(
         @Max(value = 24, message = "Duration must be between 1 and 24 months")
         Integer durationMonths,
 
-        List<UUID> skillIds
+        List<UUID> skillIds,
+
+        @Size(max = 10, message = "At most 10 target majors are allowed")
+        List<String> targetMajors
 
 ) {
 }

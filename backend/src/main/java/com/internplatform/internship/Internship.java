@@ -1,7 +1,9 @@
 package com.internplatform.internship;
 
 import com.internplatform.internprofile.Skill;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -69,6 +71,20 @@ public class Internship {
             inverseJoinColumns = @JoinColumn(name = "skill_id")
     )
     private Set<Skill> skills = new HashSet<>();
+
+    /**
+     * Lightweight, non-catalog list of major names this internship targets — used only for
+     * personalized intern feed scoring. Intentionally not a Major entity/catalog per the
+     * MVP design; values are pre-normalized (trimmed, deduplicated case-insensitively) by
+     * the service before ever reaching this collection.
+     */
+    @ElementCollection
+    @CollectionTable(
+            name = "internship_target_majors",
+            joinColumns = @JoinColumn(name = "internship_id")
+    )
+    @Column(name = "major_name", length = 150)
+    private Set<String> targetMajors = new HashSet<>();
 
     protected Internship() {
     }
@@ -181,5 +197,13 @@ public class Internship {
 
     public void setSkills(Set<Skill> skills) {
         this.skills = skills;
+    }
+
+    public Set<String> getTargetMajors() {
+        return targetMajors;
+    }
+
+    public void setTargetMajors(Set<String> targetMajors) {
+        this.targetMajors = targetMajors;
     }
 }

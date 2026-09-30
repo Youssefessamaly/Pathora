@@ -422,6 +422,7 @@ export type CompanyInternship = {
   durationMonths: number | null;
   status: InternshipStatus;
   skills: InternProfileSkill[];
+  targetMajors: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -435,13 +436,14 @@ export type CompanyInternshipCreatePayload = {
   startDate?: string;
   durationMonths?: number;
   skillIds: string[];
+  targetMajors?: string[];
 };
 
 /**
  * Partial update payload for PATCH /company/internships/{id}.
  * Matching the backend's PATCH semantics: only include the fields you want to change.
- * Omitted fields are left untouched server-side; skillIds, when included, fully replaces
- * the internship's skill set.
+ * Omitted fields are left untouched server-side; skillIds/targetMajors, when included,
+ * fully replace the internship's skill set / target-major set.
  */
 export type CompanyInternshipUpdatePayload = Partial<{
   title: string;
@@ -452,6 +454,7 @@ export type CompanyInternshipUpdatePayload = Partial<{
   startDate: string;
   durationMonths: number;
   skillIds: string[];
+  targetMajors: string[];
 }>;
 
 export function createCompanyInternship(
@@ -479,4 +482,41 @@ export function updateCompanyInternship(
 
 export function closeCompanyInternship(token: string, internshipId: string): Promise<CompanyInternship> {
   return apiPost<CompanyInternship>(`/company/internships/${internshipId}/close`, undefined, { token });
+}
+
+/**
+ * An internship as seen by the authenticated INTERN's personalized feed/detail view.
+ * Includes the same core internship fields as CompanyInternship plus backend-computed,
+ * explainable relevance facts. The relevance numbers are never recalculated client-side —
+ * they are used exactly as returned.
+ */
+export type InternInternship = {
+  id: string;
+  companyName: string;
+  title: string;
+  description: string;
+  location: string;
+  workMode: InternshipWorkMode;
+  applicationDeadline: string;
+  startDate: string | null;
+  durationMonths: number | null;
+  status: InternshipStatus;
+  skills: InternProfileSkill[];
+  targetMajors: string[];
+  relevancePercentage: number;
+  matchedSkillCount: number;
+  totalRequiredSkillCount: number;
+  matchedSkills: InternProfileSkill[];
+  majorMatch: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Personalized feed, already sorted by relevance by the backend — never re-sort client-side. */
+export function getInternInternships(token: string): Promise<InternInternship[]> {
+  return apiGet<InternInternship[]>('/intern/internships', { token });
+}
+
+export function getInternInternship(token: string, internshipId: string): Promise<InternInternship> {
+  return apiGet<InternInternship>(`/intern/internships/${internshipId}`, { token });
 }

@@ -17,6 +17,7 @@ public record InternshipResponse(
         Integer durationMonths,
         InternshipStatus status,
         List<InternshipSkillResponse> skills,
+        List<String> targetMajors,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

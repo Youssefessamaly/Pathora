@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
 import { DateInputGroup } from '@/components/date-input-group';
+import { MajorTagInput } from '@/components/major-tag-input';
 import { OnboardingGuard } from '@/components/onboarding/onboarding-guard';
 import { OnboardingOptionGroup } from '@/components/onboarding/onboarding-option-group';
 import { SkillChip } from '@/components/onboarding/skill-chip';
@@ -46,6 +47,8 @@ function NewInternshipScreen() {
   const [catalog, setCatalog] = useState<InternProfileSkill[]>([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
   const [isPickerVisible, setIsPickerVisible] = useState(false);
+
+  const [targetMajors, setTargetMajors] = useState<string[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -126,6 +129,7 @@ function NewInternshipScreen() {
         ...(startDateIso ? { startDate: startDateIso } : {}),
         ...(durationMonths ? { durationMonths: Number(durationMonths) } : {}),
         skillIds: selectedSkillIds,
+        targetMajors,
       });
 
       // Replace rather than push so going back doesn't return to a stale form and
@@ -231,6 +235,13 @@ function NewInternshipScreen() {
               </View>
               <Text style={styles.hint}>Select at least one required skill</Text>
             </View>
+
+            <MajorTagInput
+              label="Target majors (optional)"
+              majors={targetMajors}
+              onChange={setTargetMajors}
+              helperText="Add the study tracks this internship is most relevant to."
+            />
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}

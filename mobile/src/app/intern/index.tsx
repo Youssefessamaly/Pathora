@@ -1,11 +1,23 @@
-import { useRouter } from 'expo-router';
-import { useEffect, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
+import { ApiError, getInternInternships, getInternProfileOrNull, type InternInternship } from '@/lib/api';
+import { formatDisplayDate } from '@/lib/date';
+import { buildMatchExplanations, WORK_MODE_LABELS } from '@/lib/internship-options';
+import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
 
 /**
  * Client-side gate for the intern home: requires an authenticated INTERN session.
@@ -38,9 +50,93 @@ function InternHomeGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function InternshipFeedCard({ item, onPress }: { item: InternInternship; onPress: () => void }) {
+  const explanations = buildMatchExplanations(item);
+  const skillNames = item.skills.slice(0, 4).map((skill) => skill.name);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardHeaderText}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.cardCompany} numberOfLines={1}>
+            {item.companyName}
+          </Text>
+        </View>
+        <View style={styles.matchBadge}>
+          <Text style={styles.matchBadgeText}>{item.relevancePercentage}% match</Text>
+        </View>
+      </View>
+
+      <Text style={styles.cardMeta}>
+        {WORK_MODE_LABELS[item.workMode]} · {item.location}
+      </Text>
+      <Text style={styles.cardDeadline}>Deadline {formatDisplayDate(item.applicationDeadline)}</Text>
+
+      {skillNames.length > 0 && (
+        <Text style={styles.cardSkills} numberOfLines={1}>
+          {skillNames.join(' · ')}
+        </Text>
+      )}
+
+      {explanations.length > 0 && (
+        <View style={styles.explanationBlock}>
+          {explanations.map((line) => (
+            <Text key={line} style={styles.explanationText}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 function InternHomeScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, token, signOut } = useAuth();
+
+  const [internships, setInternships] = useState<InternInternship[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+    try {
+      const data = await getInternInternships(token);
+      setInternships(data);
+      setError(null);
+    } catch (loadError) {
+      if (loadError instanceof ApiError && loadError.status === 403) {
+        // Profile missing or onboarding incomplete — don't show a raw feed error,
+        // send them to resume onboarding instead.
+        const profile = await getInternProfileOrNull(token).catch(() => null);
+        const nextStep = resolveFirstIncompleteOnboardingStep(profile);
+        router.replace(nextStep ?? '/onboarding/personal');
+        return;
+      }
+      setError(describeOnboardingError(loadError));
+    }
+  }, [token, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -49,25 +145,62 @@ function InternHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>{user?.email}</Text>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Your Pathora home</Text>
-          <Text style={styles.cardBody}>
-            Your dashboard is being built. Check back soon to track applications and discover new
-            internships.
-          </Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>{user?.email}</Text>
         </View>
+      </View>
 
-        <PathoraButton
-          label="Log out"
-          variant="secondary"
-          onPress={handleSignOut}
-          style={styles.signOutButton}
-        />
-      </ScrollView>
+      {internships === null && !error && (
+        <View style={styles.centerContent}>
+          <ActivityIndicator color={PathoraColors.teal600} />
+        </View>
+      )}
+
+      {error && (
+        <View style={styles.centerContent}>
+          <Text style={styles.errorText}>{error}</Text>
+          <PathoraButton label="Try again" variant="secondary" onPress={load} style={styles.retryButton} />
+        </View>
+      )}
+
+      {internships !== null && !error && internships.length === 0 && (
+        <ScrollView
+          contentContainerStyle={styles.emptyContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
+          <Text style={styles.emptyTitle}>No open internships yet</Text>
+          <Text style={styles.emptyBody}>
+            New opportunities will appear here when companies post them.
+          </Text>
+        </ScrollView>
+      )}
+
+      {internships !== null && !error && internships.length > 0 && (
+        <ScrollView
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
+          <Text style={styles.sectionTitle}>Recommended for you</Text>
+
+          {internships.map((internship) => (
+            <InternshipFeedCard
+              key={internship.id}
+              item={internship}
+              onPress={() =>
+                router.push({ pathname: '/intern/internships/[id]', params: { id: internship.id } })
+              }
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      <PathoraButton
+        label="Log out"
+        variant="secondary"
+        onPress={handleSignOut}
+        style={styles.signOutButton}
+      />
     </SafeAreaView>
   );
 }
@@ -89,45 +222,142 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PathoraColors.paper,
   },
-  scrollContent: {
-    flexGrow: 1,
+  headerRow: {
     paddingHorizontal: PathoraSpacing[24],
-    paddingTop: PathoraSpacing[16],
+    paddingTop: 8,
+    paddingBottom: PathoraSpacing[8],
+  },
+  headerText: {
+    gap: 4,
   },
   title: {
     fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 24,
+    fontSize: 22,
     color: PathoraColors.ink900,
-    marginBottom: 6,
   },
   subtitle: {
     fontFamily: PathoraFonts.en.regular,
-    fontSize: 14,
+    fontSize: 13,
     color: PathoraColors.textSecondary,
-    marginBottom: PathoraSpacing[32],
+  },
+  centerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: PathoraSpacing[24],
+    gap: PathoraSpacing[16],
+  },
+  errorText: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 14,
+    color: PathoraColors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    minWidth: 140,
+  },
+  emptyContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: PathoraSpacing[24],
+    gap: PathoraSpacing[8],
+  },
+  emptyTitle: {
+    fontFamily: PathoraFonts.en.extraBold,
+    fontSize: 18,
+    color: PathoraColors.ink900,
+  },
+  emptyBody: {
+    fontFamily: PathoraFonts.en.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: PathoraColors.textSecondary,
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontFamily: PathoraFonts.en.extraBold,
+    fontSize: 16,
+    color: PathoraColors.ink900,
+    paddingHorizontal: PathoraSpacing[24],
+    marginBottom: PathoraSpacing[16],
+  },
+  listContent: {
+    paddingBottom: PathoraSpacing[16],
   },
   card: {
     borderRadius: PathoraRadius[14],
     backgroundColor: PathoraColors.surface,
     borderWidth: 1,
     borderColor: PathoraColors.border,
-    paddingVertical: PathoraSpacing[20],
+    paddingVertical: PathoraSpacing[16],
     paddingHorizontal: PathoraSpacing[16],
-    marginBottom: PathoraSpacing[32],
+    marginHorizontal: PathoraSpacing[24],
+    marginBottom: PathoraSpacing[12],
+  },
+  cardPressed: {
+    opacity: 0.7,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: PathoraSpacing[12],
+    marginBottom: 6,
+  },
+  cardHeaderText: {
+    flex: 1,
   },
   cardTitle: {
     fontFamily: PathoraFonts.en.bold,
-    fontSize: 15,
+    fontSize: 15.5,
     color: PathoraColors.ink900,
+  },
+  cardCompany: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 13,
+    color: PathoraColors.textSecondary,
+    marginTop: 2,
+  },
+  matchBadge: {
+    borderRadius: PathoraRadius[999],
+    backgroundColor: PathoraColors.teal100,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  matchBadgeText: {
+    fontFamily: PathoraFonts.en.extraBold,
+    fontSize: 12.5,
+    color: PathoraColors.teal700,
+  },
+  cardMeta: {
+    fontFamily: PathoraFonts.en.regular,
+    fontSize: 13,
+    color: PathoraColors.textSecondary,
+    marginBottom: 2,
+  },
+  cardDeadline: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 12.5,
+    color: PathoraColors.textTertiary,
     marginBottom: 8,
   },
-  cardBody: {
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 13.5,
-    lineHeight: 20,
-    color: PathoraColors.textSecondary,
+  cardSkills: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 12.5,
+    color: PathoraColors.ink700,
+  },
+  explanationBlock: {
+    marginTop: 8,
+    gap: 3,
+  },
+  explanationText: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 12,
+    color: PathoraColors.teal700,
   },
   signOutButton: {
-    marginBottom: PathoraSpacing[24],
+    marginHorizontal: PathoraSpacing[24],
+    marginBottom: PathoraSpacing[16],
   },
 });

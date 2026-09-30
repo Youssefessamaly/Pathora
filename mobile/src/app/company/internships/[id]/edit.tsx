@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
 import { DateInputGroup } from '@/components/date-input-group';
+import { MajorTagInput } from '@/components/major-tag-input';
 import { OnboardingGuard } from '@/components/onboarding/onboarding-guard';
 import { OnboardingOptionGroup } from '@/components/onboarding/onboarding-option-group';
 import { SkillChip } from '@/components/onboarding/skill-chip';
@@ -60,6 +61,8 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
   const [isPickerVisible, setIsPickerVisible] = useState(false);
 
+  const [targetMajors, setTargetMajors] = useState<string[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -96,6 +99,7 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
         setDurationMonths(internship.durationMonths ? String(internship.durationMonths) : '');
         setCatalog(skills);
         setSelectedSkillIds(internship.skills.map((skill) => skill.id));
+        setTargetMajors(internship.targetMajors);
       } catch (error) {
         if (!cancelled) {
           setLoadError(describeOnboardingError(error));
@@ -166,6 +170,7 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
         ...(startDateIso ? { startDate: startDateIso } : {}),
         ...(durationMonths ? { durationMonths: Number(durationMonths) } : {}),
         skillIds: selectedSkillIds,
+        targetMajors,
       });
 
       router.replace({ pathname: '/company/internships/[id]', params: { id: internshipId } });
@@ -276,6 +281,13 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
               </View>
               <Text style={styles.hint}>Select at least one required skill</Text>
             </View>
+
+            <MajorTagInput
+              label="Target majors (optional)"
+              majors={targetMajors}
+              onChange={setTargetMajors}
+              helperText="Add the study tracks this internship is most relevant to."
+            />
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}

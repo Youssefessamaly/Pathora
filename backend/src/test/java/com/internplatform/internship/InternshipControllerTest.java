@@ -392,4 +392,81 @@ class InternshipControllerTest {
         Internship stillOpen = internshipRepository.findById(internshipId).orElseThrow();
         assertThat(stillOpen.getStatus()).isEqualTo(InternshipStatus.OPEN);
     }
+
+    // 22. create accepts targetMajors
+    @Test
+    void createAcceptsTargetMajors() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("targetMajors", List.of("Computer Science", "Computer Engineering"));
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.targetMajors.length()").value(2))
+                .andExpect(jsonPath("$.targetMajors[0]").value("Computer Engineering"))
+                .andExpect(jsonPath("$.targetMajors[1]").value("Computer Science"));
+    }
+
+    // 23. duplicate target majors normalized/deduplicated
+    @Test
+    void duplicateTargetMajorsNormalizedAndDeduplicated() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("targetMajors", List.of("Computer Science", " computer science ", "Computer  Science", "  "));
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.targetMajors.length()").value(1))
+                .andExpect(jsonPath("$.targetMajors[0]").value("Computer Science"));
+    }
+
+    // 24. PATCH omitted targetMajors preserves existing values
+    @Test
+    void patchOmittedTargetMajorsPreservesExistingValues() throws Exception {
+        Map<String, Object> createBody = new HashMap<>(validCreateBody());
+        createBody.put("targetMajors", List.of("Computer Science"));
+
+        String createJson = mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(createBody)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID internshipId = UUID.fromString(objectMapper.readTree(createJson).get("id").asText());
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("title", "Updated Title"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.targetMajors.length()").value(1))
+                .andExpect(jsonPath("$.targetMajors[0]").value("Computer Science"));
+    }
+
+    // 25. PATCH supplied targetMajors replaces them
+    @Test
+    void patchSuppliedTargetMajorsReplacesExistingValues() throws Exception {
+        Map<String, Object> createBody = new HashMap<>(validCreateBody());
+        createBody.put("targetMajors", List.of("Computer Science", "Computer Engineering"));
+
+        String createJson = mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(createBody)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID internshipId = UUID.fromString(objectMapper.readTree(createJson).get("id").asText());
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("targetMajors", List.of("Software Engineering")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.targetMajors.length()").value(1))
+                .andExpect(jsonPath("$.targetMajors[0]").value("Software Engineering"));
+    }
 }

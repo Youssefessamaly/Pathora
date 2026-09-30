@@ -40,7 +40,10 @@ public record InternshipCreateRequest(
         Integer durationMonths,
 
         @NotEmpty(message = "At least one skill is required")
-        List<UUID> skillIds
+        List<UUID> skillIds,
+
+        @Size(max = 10, message = "At most 10 target majors are allowed")
+        List<String> targetMajors
 
 ) {
 }

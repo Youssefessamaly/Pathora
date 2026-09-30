@@ -140,6 +140,19 @@ function InternshipDetailsScreen() {
           </View>
         </View>
 
+        {internship.targetMajors.length > 0 && (
+          <View>
+            <Text style={styles.label}>Target majors</Text>
+            <View style={styles.chipsWrap}>
+              {internship.targetMajors.map((major) => (
+                <View key={major} style={styles.skillChip}>
+                  <Text style={styles.skillChipText}>{major}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         <PathoraButton
           label="Edit internship"
           variant="secondary"
