@@ -11,7 +11,11 @@ import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/co
 import { useAuth } from '@/context/auth-context';
 import { ApiError, getInternInternship, getInternProfileOrNull, type InternInternship } from '@/lib/api';
 import { formatDisplayDate } from '@/lib/date';
-import { buildMatchExplanations, WORK_MODE_LABELS } from '@/lib/internship-options';
+import {
+  buildMatchExplanations,
+  formatMinimumAcademicYearEligibility,
+  WORK_MODE_LABELS,
+} from '@/lib/internship-options';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -121,6 +125,12 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
             <InfoRow
               label="Duration"
               value={`${internship.durationMonths} month${internship.durationMonths === 1 ? '' : 's'}`}
+            />
+          )}
+          {internship.minimumAcademicYear !== null && (
+            <InfoRow
+              label="Eligibility"
+              value={formatMinimumAcademicYearEligibility(internship.minimumAcademicYear)}
             />
           )}
         </View>

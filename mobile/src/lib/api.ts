@@ -423,6 +423,7 @@ export type CompanyInternship = {
   status: InternshipStatus;
   skills: InternProfileSkill[];
   targetMajors: string[];
+  minimumAcademicYear: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -437,6 +438,7 @@ export type CompanyInternshipCreatePayload = {
   durationMonths?: number;
   skillIds: string[];
   targetMajors?: string[];
+  minimumAcademicYear?: number | null;
 };
 
 /**
@@ -444,6 +446,10 @@ export type CompanyInternshipCreatePayload = {
  * Matching the backend's PATCH semantics: only include the fields you want to change.
  * Omitted fields are left untouched server-side; skillIds/targetMajors, when included,
  * fully replace the internship's skill set / target-major set.
+ * minimumAcademicYear is intentionally NOT folded into the Partial<> below: the backend
+ * distinguishes omitted (preserve), a number (replace), and explicit null (clear) — Partial<>
+ * alone can only express "omitted vs a value," never "present but null." Omit this key from
+ * the request object entirely to preserve the existing value; include it as `null` to clear.
  */
 export type CompanyInternshipUpdatePayload = Partial<{
   title: string;
@@ -455,7 +461,9 @@ export type CompanyInternshipUpdatePayload = Partial<{
   durationMonths: number;
   skillIds: string[];
   targetMajors: string[];
-}>;
+}> & {
+  minimumAcademicYear?: number | null;
+};
 
 export function createCompanyInternship(
   token: string,
@@ -503,6 +511,8 @@ export type InternInternship = {
   status: InternshipStatus;
   skills: InternProfileSkill[];
   targetMajors: string[];
+  /** Eligibility requirement only — does not contribute to relevancePercentage. */
+  minimumAcademicYear: number | null;
   relevancePercentage: number;
   matchedSkillCount: number;
   totalRequiredSkillCount: number;

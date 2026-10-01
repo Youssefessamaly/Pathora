@@ -22,7 +22,11 @@ import {
   type InternshipWorkMode,
 } from '@/lib/api';
 import { parseLocalDateParts } from '@/lib/date';
-import { WORK_MODE_OPTIONS } from '@/lib/internship-options';
+import {
+  MINIMUM_ACADEMIC_YEAR_OPTIONS,
+  optionValueToMinimumAcademicYear,
+  WORK_MODE_OPTIONS,
+} from '@/lib/internship-options';
 import { describeOnboardingError } from '@/lib/onboarding';
 
 function NewInternshipScreen() {
@@ -49,6 +53,7 @@ function NewInternshipScreen() {
   const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   const [targetMajors, setTargetMajors] = useState<string[]>([]);
+  const [minimumAcademicYear, setMinimumAcademicYear] = useState('NONE');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -130,6 +135,7 @@ function NewInternshipScreen() {
         ...(durationMonths ? { durationMonths: Number(durationMonths) } : {}),
         skillIds: selectedSkillIds,
         targetMajors,
+        minimumAcademicYear: optionValueToMinimumAcademicYear(minimumAcademicYear),
       });
 
       // Replace rather than push so going back doesn't return to a stale form and
@@ -242,6 +248,18 @@ function NewInternshipScreen() {
               onChange={setTargetMajors}
               helperText="Add the study tracks this internship is most relevant to."
             />
+
+            <View>
+              <OnboardingOptionGroup
+                label="Minimum academic year (optional)"
+                options={MINIMUM_ACADEMIC_YEAR_OPTIONS}
+                value={minimumAcademicYear}
+                onChange={setMinimumAcademicYear}
+              />
+              <Text style={styles.hint}>
+                Only students in this university year or above will be eligible.
+              </Text>
+            </View>
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}

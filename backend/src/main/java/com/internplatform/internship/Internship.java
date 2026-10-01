@@ -54,6 +54,14 @@ public class Internship {
     @Column(name = "duration_months")
     private Integer durationMonths;
 
+    /**
+     * Minimum university academic year an intern must have reached to see this internship,
+     * or null for no restriction. An eligibility gate only — never contributes to
+     * relevancePercentage.
+     */
+    @Column(name = "minimum_academic_year")
+    private Integer minimumAcademicYear;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private InternshipStatus status;
@@ -173,6 +181,14 @@ public class Internship {
 
     public void setDurationMonths(Integer durationMonths) {
         this.durationMonths = durationMonths;
+    }
+
+    public Integer getMinimumAcademicYear() {
+        return minimumAcademicYear;
+    }
+
+    public void setMinimumAcademicYear(Integer minimumAcademicYear) {
+        this.minimumAcademicYear = minimumAcademicYear;
     }
 
     public InternshipStatus getStatus() {

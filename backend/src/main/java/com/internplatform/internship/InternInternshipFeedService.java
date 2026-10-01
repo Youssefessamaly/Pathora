@@ -2,6 +2,7 @@ package com.internplatform.internship;
 
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
+import com.internplatform.internprofile.AcademicLevel;
 import com.internplatform.internprofile.InternProfile;
 import com.internplatform.internprofile.InternProfileRepository;
 import com.internplatform.internprofile.Skill;
@@ -56,7 +57,10 @@ public class InternInternshipFeedService {
         InternProfile profile = requireCompletedInternProfile(userId);
 
         List<Internship> eligible = internshipRepository.findAllByStatusAndApplicationDeadlineGreaterThanEqual(
-                InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC));
+                        InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC))
+                .stream()
+                .filter(internship -> satisfiesAcademicYearRequirement(internship, profile))
+                .toList();
 
         Map<UUID, String> companyNames = loadCompanyNames(eligible);
 
@@ -74,6 +78,7 @@ public class InternInternshipFeedService {
         Internship internship = internshipRepository
                 .findByIdAndStatusAndApplicationDeadlineGreaterThanEqual(
                         internshipId, InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC))
+                .filter(found -> satisfiesAcademicYearRequirement(found, profile))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Internship not found"));
 
         String companyName = companyProfileRepository.findById(internship.getCompanyProfileId())
@@ -97,6 +102,26 @@ public class InternInternshipFeedService {
             names.put(profile.getId(), profile.getCompanyName());
         }
         return names;
+    }
+
+    /**
+     * Pure eligibility gate — never contributes to relevancePercentage. A null
+     * minimumAcademicYear means no restriction; otherwise the intern must be UNIVERSITY-level
+     * with a known academic year at or above the requirement.
+     */
+    private boolean satisfiesAcademicYearRequirement(Internship internship, InternProfile profile) {
+        Integer minimumYear = internship.getMinimumAcademicYear();
+
+        if (minimumYear == null) {
+            return true;
+        }
+
+        if (profile.getAcademicLevel() != AcademicLevel.UNIVERSITY) {
+            return false;
+        }
+
+        Short academicYear = profile.getAcademicYear();
+        return academicYear != null && academicYear >= minimumYear;
     }
 
     private InternProfile requireCompletedInternProfile(UUID userId) {
@@ -191,6 +216,7 @@ public class InternInternshipFeedService {
                 internship.getStatus(),
                 skills,
                 targetMajors,
+                internship.getMinimumAcademicYear(),
                 scored.relevancePercentage(),
                 scored.matchedSkillCount(),
                 scored.totalRequiredSkillCount(),

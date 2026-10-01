@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 
 import java.util.Comparator;
 import java.util.HashSet;
@@ -54,6 +55,7 @@ public class InternshipService {
         internship.setSkills(resolveSkills(request.skillIds()));
         internship.setTargetMajors(normalizeTargetMajors(
                 request.targetMajors() != null ? request.targetMajors() : List.of()));
+        internship.setMinimumAcademicYear(request.minimumAcademicYear());
 
         Internship saved = internshipRepository.saveAndFlush(internship);
         return toResponse(saved, profile);
@@ -121,6 +123,10 @@ public class InternshipService {
 
         if (request.targetMajors() != null) {
             internship.setTargetMajors(normalizeTargetMajors(request.targetMajors()));
+        }
+
+        if (request.minimumAcademicYear() != null) {
+            internship.setMinimumAcademicYear(resolveMinimumAcademicYear(request.minimumAcademicYear()));
         }
 
         Internship saved = internshipRepository.saveAndFlush(internship);
@@ -232,6 +238,37 @@ public class InternshipService {
         return new LinkedHashSet<>(byNormalizedKey.values());
     }
 
+    /**
+     * Bean validation (@Min/@Max) can't reach inside a raw JsonNode, so an explicitly-supplied
+     * minimumAcademicYear on PATCH is interpreted and range-checked here.
+     * Caller only invokes this when the field was present in the request at all (see
+     * updateInternship) — a JSON null node means "clear the restriction," any other
+     * non-integral node (string, boolean, decimal, ...) is rejected outright.
+     */
+    private Integer resolveMinimumAcademicYear(JsonNode node) {
+        if (node.isNull()) {
+            return null;
+        }
+
+        if (!node.isIntegralNumber()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Minimum academic year must be a whole number between 1 and 6"
+            );
+        }
+
+        int value = node.intValue();
+
+        if (value < 1 || value > 6) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Minimum academic year must be between 1 and 6"
+            );
+        }
+
+        return value;
+    }
+
     private InternshipResponse toResponse(Internship internship, CompanyProfile profile) {
         List<InternshipSkillResponse> skills = internship.getSkills().stream()
                 .sorted(Comparator.comparing(Skill::getName))
@@ -255,6 +292,7 @@ public class InternshipService {
                 internship.getStatus(),
                 skills,
                 targetMajors,
+                internship.getMinimumAcademicYear(),
                 internship.getCreatedAt(),
                 internship.getUpdatedAt()
         );

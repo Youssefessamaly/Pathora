@@ -18,6 +18,7 @@ public record InternInternshipResponse(
         InternshipStatus status,
         List<InternshipSkillResponse> skills,
         List<String> targetMajors,
+        Integer minimumAcademicYear,
         int relevancePercentage,
         int matchedSkillCount,
         int totalRequiredSkillCount,

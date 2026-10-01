@@ -469,4 +469,149 @@ class InternshipControllerTest {
                 .andExpect(jsonPath("$.targetMajors.length()").value(1))
                 .andExpect(jsonPath("$.targetMajors[0]").value("Software Engineering"));
     }
+
+    // 26. create persists minimumAcademicYear
+    @Test
+    void createPersistsMinimumAcademicYear() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("minimumAcademicYear", 4);
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.minimumAcademicYear").value(4));
+    }
+
+    // 27. PATCH changes minimumAcademicYear
+    // 28. PATCH omission preserves minimumAcademicYear
+    @Test
+    void patchChangesMinimumAcademicYearAndOmissionPreservesIt() throws Exception {
+        Map<String, Object> createBody = new HashMap<>(validCreateBody());
+        createBody.put("minimumAcademicYear", 3);
+
+        String createJson = mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(createBody)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID internshipId = UUID.fromString(objectMapper.readTree(createJson).get("id").asText());
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("minimumAcademicYear", 5))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.minimumAcademicYear").value(5));
+
+        // Omitting the field on a subsequent PATCH must leave the previously-set value unchanged.
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("title", "Updated Title Only"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Updated Title Only"))
+                .andExpect(jsonPath("$.minimumAcademicYear").value(5));
+    }
+
+    // 29. PATCH explicit null removes restriction
+    @Test
+    void patchExplicitNullRemovesMinimumAcademicYearRestriction() throws Exception {
+        Map<String, Object> createBody = new HashMap<>(validCreateBody());
+        createBody.put("minimumAcademicYear", 4);
+
+        String createJson = mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(createBody)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID internshipId = UUID.fromString(objectMapper.readTree(createJson).get("id").asText());
+
+        Map<String, Object> clearBody = new HashMap<>();
+        clearBody.put("minimumAcademicYear", null);
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(clearBody)))
+                .andExpect(status().isOk());
+
+        Internship updated = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(updated.getMinimumAcademicYear()).isNull();
+    }
+
+    // PATCH with a non-numeric minimumAcademicYear is rejected, and does not change the
+    // previously-set value.
+    @Test
+    void patchNonNumericMinimumAcademicYearRejected() throws Exception {
+        Map<String, Object> createBody = new HashMap<>(validCreateBody());
+        createBody.put("minimumAcademicYear", 4);
+
+        String createJson = mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(createBody)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID internshipId = UUID.fromString(objectMapper.readTree(createJson).get("id").asText());
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("minimumAcademicYear", "five"))))
+                .andExpect(status().isBadRequest());
+
+        Internship unchanged = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(unchanged.getMinimumAcademicYear()).isEqualTo(4);
+    }
+
+    // PATCH with an out-of-range minimumAcademicYear (0 or 7) is rejected.
+    @Test
+    void patchOutOfRangeMinimumAcademicYearRejected() throws Exception {
+        UUID internshipId = createInternship(companyUser);
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("minimumAcademicYear", 0))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("minimumAcademicYear", 7))))
+                .andExpect(status().isBadRequest());
+
+        Internship unchanged = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(unchanged.getMinimumAcademicYear()).isNull();
+    }
+
+    // 30. invalid create year 0 rejected
+    @Test
+    void invalidCreateMinimumAcademicYearZeroRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("minimumAcademicYear", 0);
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 31. invalid create year 7 rejected
+    @Test
+    void invalidCreateMinimumAcademicYearSevenRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("minimumAcademicYear", 7);
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
 }

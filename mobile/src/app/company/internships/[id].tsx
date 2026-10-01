@@ -10,7 +10,7 @@ import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/co
 import { useAuth } from '@/context/auth-context';
 import { closeCompanyInternship, getCompanyInternship, type CompanyInternship } from '@/lib/api';
 import { formatDisplayDate } from '@/lib/date';
-import { WORK_MODE_LABELS } from '@/lib/internship-options';
+import { formatMinimumAcademicYearLabel, WORK_MODE_LABELS } from '@/lib/internship-options';
 import { describeOnboardingError } from '@/lib/onboarding';
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -125,6 +125,12 @@ function InternshipDetailsScreen() {
             <InfoRow
               label="Duration"
               value={`${internship.durationMonths} month${internship.durationMonths === 1 ? '' : 's'}`}
+            />
+          )}
+          {internship.minimumAcademicYear !== null && (
+            <InfoRow
+              label="Minimum academic year"
+              value={formatMinimumAcademicYearLabel(internship.minimumAcademicYear)}
             />
           )}
         </View>

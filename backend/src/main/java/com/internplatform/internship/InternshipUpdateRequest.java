@@ -3,6 +3,7 @@ package com.internplatform.internship;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -14,6 +15,15 @@ import java.util.UUID;
  * Omitted fields are left untouched server-side. When supplied, skillIds replaces the
  * internship's entire skill set (it must still be non-empty — checked in the service,
  * since bean validation alone can't express "null is fine, empty is not").
+ * minimumAcademicYear uses a raw {@link JsonNode} instead of a plain Integer because this
+ * field needs a third state beyond "omitted"/"value": "explicitly cleared back to no
+ * restriction". A custom Integer-wrapping deserializer was tried first, but Jackson 3's
+ * record binding routes an absent constructor argument through getAbsentValue(), which by
+ * default falls back to getNullValue() — collapsing "omitted" and "explicit null" into the
+ * same result. JsonNode sidesteps that entirely: Jackson's built-in handling leaves the
+ * component reference null when the key is absent, and produces a non-null NullNode (whose
+ * isNull() is true) when the key is explicitly present with a JSON null value — see
+ * InternshipService for how the three states are interpreted.
  */
 public record InternshipUpdateRequest(
 
@@ -39,7 +49,9 @@ public record InternshipUpdateRequest(
         List<UUID> skillIds,
 
         @Size(max = 10, message = "At most 10 target majors are allowed")
-        List<String> targetMajors
+        List<String> targetMajors,
+
+        JsonNode minimumAcademicYear
 
 ) {
 }

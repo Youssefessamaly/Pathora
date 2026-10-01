@@ -32,7 +32,12 @@ import {
   type InternshipWorkMode,
 } from '@/lib/api';
 import { parseLocalDateParts, splitIsoDate } from '@/lib/date';
-import { WORK_MODE_OPTIONS } from '@/lib/internship-options';
+import {
+  MINIMUM_ACADEMIC_YEAR_OPTIONS,
+  minimumAcademicYearToOptionValue,
+  optionValueToMinimumAcademicYear,
+  WORK_MODE_OPTIONS,
+} from '@/lib/internship-options';
 import { describeOnboardingError } from '@/lib/onboarding';
 
 function EditInternshipScreen({ internshipId }: { internshipId: string }) {
@@ -62,6 +67,7 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
   const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   const [targetMajors, setTargetMajors] = useState<string[]>([]);
+  const [minimumAcademicYear, setMinimumAcademicYear] = useState('NONE');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -100,6 +106,7 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
         setCatalog(skills);
         setSelectedSkillIds(internship.skills.map((skill) => skill.id));
         setTargetMajors(internship.targetMajors);
+        setMinimumAcademicYear(minimumAcademicYearToOptionValue(internship.minimumAcademicYear));
       } catch (error) {
         if (!cancelled) {
           setLoadError(describeOnboardingError(error));
@@ -171,6 +178,10 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
         ...(durationMonths ? { durationMonths: Number(durationMonths) } : {}),
         skillIds: selectedSkillIds,
         targetMajors,
+        // Always sent explicitly (never omitted) so selecting "No restriction" can clear a
+        // previously-set value — the backend PATCH only clears on an explicit JSON null, and
+        // an omitted key would leave the old restriction in place.
+        minimumAcademicYear: optionValueToMinimumAcademicYear(minimumAcademicYear),
       });
 
       router.replace({ pathname: '/company/internships/[id]', params: { id: internshipId } });
@@ -288,6 +299,18 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
               onChange={setTargetMajors}
               helperText="Add the study tracks this internship is most relevant to."
             />
+
+            <View>
+              <OnboardingOptionGroup
+                label="Minimum academic year (optional)"
+                options={MINIMUM_ACADEMIC_YEAR_OPTIONS}
+                value={minimumAcademicYear}
+                onChange={setMinimumAcademicYear}
+              />
+              <Text style={styles.hint}>
+                Only students in this university year or above will be eligible.
+              </Text>
+            </View>
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}

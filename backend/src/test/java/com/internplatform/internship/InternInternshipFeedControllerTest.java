@@ -136,6 +136,16 @@ class InternInternshipFeedControllerTest {
             LocalDate applicationDeadline,
             InternshipStatus status
     ) {
+        return createInternship(requiredSkillNames, targetMajors, applicationDeadline, status, null);
+    }
+
+    private Internship createInternship(
+            List<String> requiredSkillNames,
+            Set<String> targetMajors,
+            LocalDate applicationDeadline,
+            InternshipStatus status,
+            Integer minimumAcademicYear
+    ) {
         Internship internship = new Internship(companyProfile.getId());
         internship.setTitle("Backend Engineering Intern");
         internship.setDescription("Work on our core platform.");
@@ -145,7 +155,30 @@ class InternInternshipFeedControllerTest {
         internship.setStatus(status);
         internship.setSkills(skillsByNames(requiredSkillNames));
         internship.setTargetMajors(targetMajors);
+        internship.setMinimumAcademicYear(minimumAcademicYear);
         return internshipRepository.saveAndFlush(internship);
+    }
+
+    private InternProfile createInternProfileWithAcademicStanding(
+            User user,
+            AcademicLevel academicLevel,
+            Short academicYear,
+            String major
+    ) {
+        InternProfile profile = new InternProfile(user.getId());
+        profile.setFirstName("Amina");
+        profile.setLastName("Hassan");
+        profile.setDateOfBirth(LocalDate.of(2001, 5, 10));
+        profile.setPhoneNumber("+201012345678");
+        profile.setInstitutionName("Cairo University");
+        profile.setAcademicLevel(academicLevel);
+        profile.setAcademicYear(academicYear);
+        profile.setMajor(major);
+        profile.setExpectedGraduationYear((short) (Year.now().getValue() + 1));
+        profile.setCareerInterests("Software engineering");
+        profile.setSkills(skillsByNames(List.of("Java")));
+        profile.setOnboardingCompletedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        return internProfileRepository.saveAndFlush(profile);
     }
 
     private RequestPostProcessor asUser(User user) {
@@ -397,5 +430,98 @@ class InternInternshipFeedControllerTest {
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isNotFound());
+    }
+
+    // 20. unrestricted internship appears for university intern
+    @Test
+    void unrestrictedInternshipAppearsForUniversityIntern() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 2, "Computer Science");
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, null);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    // 21. minimum year 4 appears for year-4 intern
+    @Test
+    void minimumYearFourAppearsForYearFourIntern() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 4, "Computer Science");
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].minimumAcademicYear").value(4));
+    }
+
+    // 22. minimum year 4 appears for year-5 intern
+    @Test
+    void minimumYearFourAppearsForYearFiveIntern() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 5, "Computer Science");
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    // 23. minimum year 4 excluded for year-3 intern
+    @Test
+    void minimumYearFourExcludedForYearThreeIntern() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 3, "Computer Science");
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // 24. minimum year restriction excluded for HIGH_SCHOOL intern
+    @Test
+    void minimumYearRestrictionExcludesHighSchoolIntern() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.HIGH_SCHOOL, null, "N/A");
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 1);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // 25. restricted internship detail unavailable for ineligible intern
+    @Test
+    void restrictedInternshipDetailUnavailableForIneligibleIntern() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 2, "Computer Science");
+        Internship internship = createInternship(
+                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
+                .andExpect(status().isNotFound());
+    }
+
+    // 26. unrestricted detail still works
+    @Test
+    void unrestrictedInternshipDetailStillWorks() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 1, "Computer Science");
+        Internship internship = createInternship(
+                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, null);
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(internship.getId().toString()));
+    }
+
+    // 27. relevance score remains unchanged by academic-year requirement
+    @Test
+    void relevanceScoreUnchangedByAcademicYearRequirement() throws Exception {
+        createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 4, "Computer Science");
+        Internship restricted = createInternship(
+                List.of("Java"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + restricted.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relevancePercentage").value(100))
+                .andExpect(jsonPath("$.matchedSkillCount").value(1))
+                .andExpect(jsonPath("$.majorMatch").value(true));
     }
 }

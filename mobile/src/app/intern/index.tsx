@@ -16,7 +16,7 @@ import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/co
 import { useAuth } from '@/context/auth-context';
 import { ApiError, getInternInternships, getInternProfileOrNull, type InternInternship } from '@/lib/api';
 import { formatDisplayDate } from '@/lib/date';
-import { buildMatchExplanations, WORK_MODE_LABELS } from '@/lib/internship-options';
+import { buildMatchExplanations, formatMinimumAcademicYearLabel, WORK_MODE_LABELS } from '@/lib/internship-options';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
 
 /**
@@ -75,6 +75,7 @@ function InternshipFeedCard({ item, onPress }: { item: InternInternship; onPress
 
       <Text style={styles.cardMeta}>
         {WORK_MODE_LABELS[item.workMode]} · {item.location}
+        {item.minimumAcademicYear !== null && ` · ${formatMinimumAcademicYearLabel(item.minimumAcademicYear)}`}
       </Text>
       <Text style={styles.cardDeadline}>Deadline {formatDisplayDate(item.applicationDeadline)}</Text>
 

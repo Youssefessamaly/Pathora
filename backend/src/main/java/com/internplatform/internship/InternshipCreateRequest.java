@@ -43,7 +43,11 @@ public record InternshipCreateRequest(
         List<UUID> skillIds,
 
         @Size(max = 10, message = "At most 10 target majors are allowed")
-        List<String> targetMajors
+        List<String> targetMajors,
+
+        @Min(value = 1, message = "Minimum academic year must be between 1 and 6")
+        @Max(value = 6, message = "Minimum academic year must be between 1 and 6")
+        Integer minimumAcademicYear
 
 ) {
 }
