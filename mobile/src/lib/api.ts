@@ -3,6 +3,9 @@
  * Never log request bodies here — they may contain passwords.
  */
 
+import { File } from 'expo-file-system';
+import { fetch as expoFetch } from 'expo/fetch';
+
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 export class ApiError extends Error {
@@ -260,6 +263,9 @@ export type InternProfile = {
   onboardingCompleted: boolean;
   cvFileName: string | null;
   cvUploadedAt: string | null;
+  /** Pathora catalog skills the backend detected in the most recently uploaded CV —
+   * distinct from the intern's manually selected `skills`. Never raw CV text. */
+  cvDetectedSkills: InternProfileSkill[];
   createdAt: string;
   updatedAt: string;
 };
@@ -324,6 +330,9 @@ export type CvUploadResponse = {
   contentType: string;
   sizeBytes: number;
   uploadedAt: string;
+  /** Pathora catalog skills detected in this CV by the backend — may be empty if none
+   * were recognized. Detection happens server-side only; never computed on-device. */
+  detectedSkills: InternProfileSkill[];
 };
 
 export type CvFileToUpload = {
@@ -332,16 +341,55 @@ export type CvFileToUpload = {
   mimeType: string;
 };
 
-export function uploadInternCv(token: string, file: CvFileToUpload): Promise<CvUploadResponse> {
-  const formData = new FormData();
-  // React Native's networking layer special-cases this {uri, name, type} shape to stream
-  // the local file by URI — it is not a real Blob, hence the cast.
-  formData.append(
-    'file',
-    { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob,
-  );
+/**
+ * Uploads the intern's CV. Uses expo-file-system's File (a reference to the picked file,
+ * not read into JS memory) and expo/fetch (spec-compliant FormData/streaming support) —
+ * the legacy React Native {uri, name, type} FormData part shape is not supported by the
+ * current networking stack. Content-Type is intentionally left unset so the multipart
+ * boundary is generated automatically.
+ */
+export async function uploadInternCv(token: string, file: CvFileToUpload): Promise<CvUploadResponse> {
+  const url = `${getBaseUrl()}/intern/profile/cv`;
+  const selectedFile = new File(file.uri);
 
-  return apiPostForm<CvUploadResponse>('/intern/profile/cv', formData, { token });
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+
+  let response: Awaited<ReturnType<typeof expoFetch>>;
+  try {
+    response = await expoFetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch {
+    throw new NetworkError();
+  }
+
+  if (!response.ok) {
+    let errorBody: unknown;
+    try {
+      const errorText = await response.text();
+      errorBody = errorText ? JSON.parse(errorText) : undefined;
+    } catch {
+      errorBody = undefined;
+    }
+    throw new ApiError(response.status, friendlyMessageForStatus(response.status), errorBody);
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as unknown as CvUploadResponse;
+  }
+
+  try {
+    return JSON.parse(text) as CvUploadResponse;
+  } catch {
+    throw new ApiError(response.status, 'Received an unexpected response from the server.');
+  }
 }
 
 export type CompanyProfile = {

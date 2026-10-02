@@ -95,6 +95,20 @@ public class InternProfile {
     )
     private Set<Skill> skills = new HashSet<>();
 
+    /**
+     * Pathora catalog skills detected in the intern's most recently uploaded CV. Fully
+     * replaced (not merged) on every CV upload so a replaced CV never leaves stale skills
+     * behind. Kept separate from the explicit, intern-selected `skills` set — the union of
+     * the two is computed only where needed (recommendation scoring), never persisted.
+     */
+    @ManyToMany
+    @JoinTable(
+            name = "intern_cv_skills",
+            joinColumns = @JoinColumn(name = "intern_profile_id"),
+            inverseJoinColumns = @JoinColumn(name = "skill_id")
+    )
+    private Set<Skill> cvDetectedSkills = new HashSet<>();
+
     protected InternProfile() {
     }
 
@@ -277,5 +291,13 @@ public class InternProfile {
 
     public void setSkills(Set<Skill> skills) {
         this.skills = skills;
+    }
+
+    public Set<Skill> getCvDetectedSkills() {
+        return cvDetectedSkills;
+    }
+
+    public void setCvDetectedSkills(Set<Skill> cvDetectedSkills) {
+        this.cvDetectedSkills = cvDetectedSkills;
     }
 }

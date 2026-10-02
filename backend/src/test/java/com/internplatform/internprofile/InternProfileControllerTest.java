@@ -3,6 +3,11 @@ package com.internplatform.internprofile;
 import com.internplatform.user.Role;
 import com.internplatform.user.User;
 import com.internplatform.user.UserRepository;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,6 +29,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -328,8 +335,44 @@ class InternProfileControllerTest {
         assertThat(secondResponse.updatedAt()).isAfter(firstResponse.updatedAt());
     }
 
-    private static byte[] validPdfBytes() {
-        return "%PDF-1.4\nFake minimal PDF content for tests\n%%EOF".getBytes(StandardCharsets.US_ASCII);
+    /**
+     * Builds a genuinely loadable PDF (not just bytes with the right magic header) so tests
+     * exercise the real PDFBox-based text extraction path. Each argument becomes its own
+     * line in the content stream, letting tests simulate a skill name wrapping across lines
+     * (e.g. "Spring" / "Boot") the way a real CV layout might.
+     */
+    private static byte[] createPdfWithLines(String... lines) throws IOException {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                stream.newLineAtOffset(50, 700);
+                for (int i = 0; i < lines.length; i++) {
+                    if (i > 0) {
+                        stream.newLineAtOffset(0, -14);
+                    }
+                    stream.showText(lines[i]);
+                }
+                stream.endText();
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.save(out);
+            return out.toByteArray();
+        }
+    }
+
+    private static byte[] validPdfBytes() throws IOException {
+        return createPdfWithLines("Experienced software engineer.");
+    }
+
+    /** Has the correct "%PDF-" signature (passes the cheap header check) but is not a
+     * structurally valid, parseable PDF — exercises the text-extraction failure path. */
+    private static byte[] structurallyInvalidPdfBytes() {
+        return "%PDF-1.4\nthis is not a real PDF body\n%%EOF".getBytes(StandardCharsets.US_ASCII);
     }
 
     @Test
@@ -450,7 +493,7 @@ class InternProfileControllerTest {
                 .getCvStorageKey();
         assertThat(firstStorageKey).isNotNull();
 
-        byte[] newPdf = "%PDF-1.4\nDifferent content\n%%EOF".getBytes(StandardCharsets.US_ASCII);
+        byte[] newPdf = createPdfWithLines("Different content");
 
         mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
                         .file(new MockMultipartFile("file", "new-resume.pdf", "application/pdf", newPdf))
@@ -498,5 +541,131 @@ class InternProfileControllerTest {
                 .getOnboardingCompletedAt();
 
         assertThat(secondCompletedAt).isEqualTo(firstCompletedAt);
+    }
+
+    @Test
+    void uploadingCvDetectsRecognizedSkills() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] pdf = createPdfWithLines("Experienced with Java and SQL databases.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("Java")))
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("SQL")));
+
+        mockMvc.perform(get("/api/v1/intern/profile").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cvDetectedSkills[*].name", hasItem("Java")))
+                .andExpect(jsonPath("$.cvDetectedSkills[*].name", hasItem("SQL")));
+    }
+
+    @Test
+    void uploadingCvWithJavaScriptDoesNotFalselyDetectJava() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] pdf = createPdfWithLines("Proficient in JavaScript development.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("JavaScript")))
+                .andExpect(jsonPath("$.detectedSkills.length()").value(1));
+    }
+
+    @Test
+    void uploadingCvWithNoRecognizedSkillsYieldsEmptySet() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] pdf = createPdfWithLines("Looking forward to a great opportunity.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills.length()").value(0));
+    }
+
+    @Test
+    void replacingCvReplacesDetectedSkillsRatherThanAccumulating() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] firstPdf = createPdfWithLines("Skilled in Java and SQL.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "old-resume.pdf", "application/pdf", firstPdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills.length()").value(2));
+
+        byte[] secondPdf = createPdfWithLines("Now focused on Python.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "new-resume.pdf", "application/pdf", secondPdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills.length()").value(1))
+                .andExpect(jsonPath("$.detectedSkills[0].name").value("Python"));
+
+        mockMvc.perform(get("/api/v1/intern/profile").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cvDetectedSkills.length()").value(1))
+                .andExpect(jsonPath("$.cvDetectedSkills[0].name").value("Python"));
+    }
+
+    @Test
+    void multiWordSkillDetectedAcrossWrappedLines() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        // Simulates a skill name wrapping across two lines of a real CV layout.
+        byte[] pdf = createPdfWithLines("Built dashboards with Power", "BI and used Spring", "Boot for the backend.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("Power BI")))
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("Spring Boot")));
+    }
+
+    @Test
+    void skillDetectionIsCaseInsensitive() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        byte[] pdf = createPdfWithLines("strong PYTHON and excel skills.");
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("Python")))
+                .andExpect(jsonPath("$.detectedSkills[*].name", hasItem("Excel")));
+    }
+
+    @Test
+    void structurallyInvalidPdfRejectedAndExistingCvUnchanged() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        // Establish a baseline CV first.
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "baseline.pdf", "application/pdf", createPdfWithLines("Java developer.")))
+                        .with(asIntern()))
+                .andExpect(status().isOk());
+
+        // A file with a valid "%PDF-" signature but no real PDF structure must be rejected
+        // outright — not silently treated as "zero skills detected" — and must not disturb
+        // the already-uploaded baseline CV.
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile(
+                                "file", "broken.pdf", "application/pdf", structurallyInvalidPdfBytes()))
+                        .with(asIntern()))
+                .andExpect(status().isBadRequest());
+
+        InternProfile unchanged = internProfileRepository.findByUserId(internUser.getId()).orElseThrow();
+        assertThat(unchanged.getCvOriginalFilename()).isEqualTo("baseline.pdf");
+        assertThat(unchanged.getCvDetectedSkills()).extracting(Skill::getName).containsExactly("Java");
     }
 }

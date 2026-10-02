@@ -14,6 +14,8 @@ export const PathoraColors = {
   amber600: '#C6821F',
   amber500: '#E8A33D',
   amber100: '#FCEEDA',
+  /** Accessible text color for content shown on an amber100 tint background (e.g. match pills). */
+  amberTextOnTint: '#6B4310',
   paper: '#FAF8F4',
   surface: '#FFFFFF',
   border: '#E6E2D8',

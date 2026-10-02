@@ -23,6 +23,7 @@ public record InternProfileResponse(
         boolean onboardingCompleted,
         String cvFileName,
         OffsetDateTime cvUploadedAt,
+        List<SkillResponse> cvDetectedSkills,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -138,9 +139,7 @@ public class InternInternshipFeedService {
     }
 
     private ScoredInternship score(Internship internship, InternProfile profile) {
-        Set<UUID> internSkillIds = profile.getSkills().stream()
-                .map(Skill::getId)
-                .collect(Collectors.toSet());
+        Set<UUID> internSkillIds = effectiveSkillIds(profile);
 
         List<Skill> requiredSkills = internship.getSkills().stream()
                 .sorted(Comparator.comparing(Skill::getName))
@@ -162,6 +161,22 @@ public class InternInternshipFeedService {
         int relevancePercentage = clamp((int) Math.round(skillScore + majorScore));
 
         return new ScoredInternship(internship, relevancePercentage, matchedCount, totalRequired, matchedSkills, majorMatch);
+    }
+
+    /**
+     * effectiveSkillIds = profile-selected skills UNION CV-detected skills, deduplicated by
+     * Set semantics (a skill present in both counts once). This is the only change this
+     * feature makes to recommendation scoring — major scoring, academic-year eligibility,
+     * OPEN/deadline eligibility, and sort order are all untouched.
+     */
+    private Set<UUID> effectiveSkillIds(InternProfile profile) {
+        Set<UUID> ids = profile.getSkills().stream()
+                .map(Skill::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        profile.getCvDetectedSkills().forEach(skill -> ids.add(skill.getId()));
+
+        return ids;
     }
 
     private boolean matchesTargetMajor(String internMajor, Set<String> targetMajors) {

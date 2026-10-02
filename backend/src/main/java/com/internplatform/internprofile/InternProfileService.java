@@ -36,15 +36,18 @@ public class InternProfileService {
     private final InternProfileRepository internProfileRepository;
     private final SkillRepository skillRepository;
     private final CvStorageService cvStorageService;
+    private final CvSkillExtractionService cvSkillExtractionService;
 
     public InternProfileService(
             InternProfileRepository internProfileRepository,
             SkillRepository skillRepository,
-            CvStorageService cvStorageService
+            CvStorageService cvStorageService,
+            CvSkillExtractionService cvSkillExtractionService
     ) {
         this.internProfileRepository = internProfileRepository;
         this.skillRepository = skillRepository;
         this.cvStorageService = cvStorageService;
+        this.cvSkillExtractionService = cvSkillExtractionService;
     }
 
     @Transactional(readOnly = true)
@@ -152,6 +155,13 @@ public class InternProfileService {
 
         validatePdfSignature(content);
 
+        // Extraction/detection happens before anything is persisted or stored: if the PDF
+        // can't be parsed, the upload fails cleanly with the old CV/metadata untouched,
+        // exactly like a bad signature already does — never a half-applied replacement.
+        String extractedText = cvSkillExtractionService.extractText(content);
+        Set<Skill> detectedSkills = cvSkillExtractionService.detectSkills(
+                extractedText, skillRepository.findAllByOrderByNameAsc());
+
         String previousStorageKey = profile.getCvStorageKey();
         String storageKey = cvStorageService.store(profile.getId(), content);
 
@@ -160,6 +170,9 @@ public class InternProfileService {
         profile.setCvContentType(MediaType.APPLICATION_PDF_VALUE);
         profile.setCvSizeBytes(content.length);
         profile.setCvUploadedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        // Full replace, not merge — a replaced CV must not accumulate skills detected from
+        // an earlier, now-superseded CV.
+        profile.setCvDetectedSkills(detectedSkills);
 
         InternProfile saved = internProfileRepository.saveAndFlush(profile);
 
@@ -171,7 +184,8 @@ public class InternProfileService {
                 saved.getCvOriginalFilename(),
                 saved.getCvContentType(),
                 saved.getCvSizeBytes(),
-                saved.getCvUploadedAt()
+                saved.getCvUploadedAt(),
+                toSkillResponses(saved.getCvDetectedSkills())
         );
     }
 
@@ -331,10 +345,7 @@ public class InternProfileService {
     }
 
     private InternProfileResponse toResponse(InternProfile profile) {
-        List<SkillResponse> skills = profile.getSkills().stream()
-                .sorted(Comparator.comparing(Skill::getName))
-                .map(skill -> new SkillResponse(skill.getId(), skill.getName()))
-                .toList();
+        List<SkillResponse> skills = toSkillResponses(profile.getSkills());
 
         return new InternProfileResponse(
                 profile.getId(),
@@ -354,9 +365,17 @@ public class InternProfileService {
                 profile.getOnboardingCompletedAt() != null,
                 profile.getCvOriginalFilename(),
                 profile.getCvUploadedAt(),
+                toSkillResponses(profile.getCvDetectedSkills()),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt()
         );
+    }
+
+    private List<SkillResponse> toSkillResponses(Set<Skill> skills) {
+        return skills.stream()
+                .sorted(Comparator.comparing(Skill::getName))
+                .map(skill -> new SkillResponse(skill.getId(), skill.getName()))
+                .toList();
     }
 
     private static Integer toInteger(Short value) {

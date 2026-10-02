@@ -524,4 +524,121 @@ class InternInternshipFeedControllerTest {
                 .andExpect(jsonPath("$.matchedSkillCount").value(1))
                 .andExpect(jsonPath("$.majorMatch").value(true));
     }
+
+    // 28. profile-selected skill + CV skill are unioned for ranking
+    // 10. major score (the 30-point component) is correctly unaffected when combined with
+    //     CV-sourced skills — still adds exactly 30 on top of the union-based skillScore.
+    @Test
+    void profileAndCvSkillsAreUnionedForMatching() throws Exception {
+        InternProfile profile = createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
+        profile.setCvDetectedSkills(skillsByNames(List.of("SQL")));
+        internProfileRepository.saveAndFlush(profile);
+
+        Internship internship = createInternship(
+                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchedSkillCount").value(2))
+                .andExpect(jsonPath("$.majorMatch").value(true))
+                .andExpect(jsonPath("$.relevancePercentage").value(100));
+    }
+
+    // 29. duplicate skill in profile and CV counts once
+    @Test
+    void duplicateSkillInProfileAndCvCountsOnce() throws Exception {
+        InternProfile profile = createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
+        // Same skill explicitly selected AND detected from the CV — must not double-count.
+        profile.setCvDetectedSkills(skillsByNames(List.of("Java")));
+        internProfileRepository.saveAndFlush(profile);
+
+        Internship internship = createInternship(
+                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchedSkillCount").value(1))
+                .andExpect(jsonPath("$.totalRequiredSkillCount").value(1))
+                .andExpect(jsonPath("$.relevancePercentage").value(70));
+    }
+
+    // 9. CV-only skill can increase matchedSkillCount/relevance (feed-level view)
+    @Test
+    void cvOnlySkillIncreasesMatchedCountAndRelevance() throws Exception {
+        InternProfile profile = createCompletedInternProfile(internUser, "Computer Science", List.of());
+        profile.setCvDetectedSkills(skillsByNames(List.of("Java")));
+        internProfileRepository.saveAndFlush(profile);
+
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].matchedSkillCount").value(1))
+                .andExpect(jsonPath("$[0].relevancePercentage").value(70));
+    }
+
+    // 10 & 11. major score and academic-year eligibility remain unchanged by CV skills
+    @Test
+    void majorScoreAndAcademicYearEligibilityUnaffectedByCvSkills() throws Exception {
+        InternProfile profile = createInternProfileWithAcademicStanding(
+                internUser, AcademicLevel.UNIVERSITY, (short) 3, "Computer Science");
+        profile.setCvDetectedSkills(skillsByNames(List.of("SQL")));
+        internProfileRepository.saveAndFlush(profile);
+
+        // Restricted to year 4+: a year-3 intern must still be excluded regardless of CV skills.
+        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // 13. another intern cannot affect/access these CV-derived skills
+    @Test
+    void anotherInternCvSkillsDoNotLeakToOtherInterns() throws Exception {
+        createCompletedInternProfile(internUser, "Computer Science", List.of());
+
+        User otherInternUser = createUser(Role.INTERN);
+        InternProfile otherProfile = createCompletedInternProfile(otherInternUser, "Computer Science", List.of());
+        otherProfile.setCvDetectedSkills(skillsByNames(List.of("Java")));
+        internProfileRepository.saveAndFlush(otherProfile);
+
+        Internship internship = createInternship(
+                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+
+        // The authenticated intern (no CV skills of their own) must not see the other
+        // intern's CV-detected "Java" reflected in their own match.
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchedSkillCount").value(0))
+                .andExpect(jsonPath("$.relevancePercentage").value(0));
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asUser(otherInternUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.matchedSkillCount").value(1))
+                .andExpect(jsonPath("$.relevancePercentage").value(70));
+    }
+
+    // 12. ranking order legitimately changes where the effective skill match changes it
+    @Test
+    void cvSkillLegitimatelyChangesRankOrder() throws Exception {
+        InternProfile profile = createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
+        profile.setCvDetectedSkills(skillsByNames(List.of("SQL", "Python")));
+        internProfileRepository.saveAndFlush(profile);
+
+        // 1/1 profile-only match -> 70% without CV skills.
+        Internship profileOnlyMatch = createInternship(
+                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        // 3/3 matched once CV skills are unioned in -> 70% as well, but with a higher
+        // matchedSkillCount, so it must now rank first on the tiebreak.
+        Internship cvBoostedMatch = createInternship(
+                List.of("Java", "SQL", "Python"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(cvBoostedMatch.getId().toString()))
+                .andExpect(jsonPath("$[0].matchedSkillCount").value(3))
+                .andExpect(jsonPath("$[1].id").value(profileOnlyMatch.getId().toString()))
+                .andExpect(jsonPath("$[1].matchedSkillCount").value(1));
+    }
 }

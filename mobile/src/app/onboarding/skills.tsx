@@ -50,6 +50,7 @@ function SkillsAndInterestsScreen() {
   const [cvFileName, setCvFileName] = useState<string | null>(null);
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
+  const [cvDetectedSkills, setCvDetectedSkills] = useState<InternProfileSkill[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +74,7 @@ function SkillsAndInterestsScreen() {
           setLinkedinUrl(profile.linkedinUrl ?? '');
           setIsCompleted(profile.onboardingCompleted);
           setCvFileName(profile.cvFileName);
+          setCvDetectedSkills(profile.cvDetectedSkills);
         }
       } catch {
         // Best-effort prefill/catalog fetch — the picker will just show empty until retried.
@@ -140,7 +142,11 @@ function SkillsAndInterestsScreen() {
         mimeType: asset.mimeType ?? 'application/pdf',
       });
       setCvFileName(uploaded.fileName);
+      // Replace, never merge — a re-uploaded CV's detected skills fully supersede the
+      // previous CV's, exactly as the backend itself replaces them.
+      setCvDetectedSkills(uploaded.detectedSkills);
     } catch (error) {
+      // Leave cvFileName/cvDetectedSkills untouched on failure — nothing changed server-side.
       setCvError(describeOnboardingError(error));
     } finally {
       setIsUploadingCv(false);
@@ -170,6 +176,12 @@ function SkillsAndInterestsScreen() {
 
       const completedProfile = await completeInternOnboarding(token);
       setIsCompleted(completedProfile.onboardingCompleted);
+      // Pop the entire stack (onboarding steps, register/login, etc.) back to its root,
+      // then replace that root with /intern — so nothing from before onboarding completed
+      // remains in history and Android Back can't expose Step 1/2/3.
+      router.dismissAll();
+      router.replace('/intern');
+      return;
     } catch (error) {
       const missingFields = getOnboardingMissingFields(error);
       setSubmitError(
@@ -265,6 +277,23 @@ function SkillsAndInterestsScreen() {
               </Pressable>
               {cvError && <Text style={styles.cvError}>{cvError}</Text>}
             </View>
+
+            {cvFileName && !isUploadingCv && (
+              <View>
+                <Text style={styles.label}>Skills detected from your CV</Text>
+                {cvDetectedSkills.length > 0 ? (
+                  <View style={styles.chipsWrap}>
+                    {cvDetectedSkills.map((skill) => (
+                      <View key={skill.id} style={styles.detectedSkillChip}>
+                        <Text style={styles.detectedSkillChipText}>{skill.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.hint}>No Pathora skills were detected from this CV.</Text>
+                )}
+              </View>
+            )}
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}
@@ -337,6 +366,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  detectedSkillChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: PathoraRadius[999],
+    backgroundColor: PathoraColors.teal100,
+  },
+  detectedSkillChipText: {
+    fontFamily: PathoraFonts.en.semiBold,
+    fontSize: 13,
+    color: PathoraColors.teal700,
   },
   addSkillButton: {
     flexDirection: 'row',
