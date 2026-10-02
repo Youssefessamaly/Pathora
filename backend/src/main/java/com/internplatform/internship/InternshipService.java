@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +26,12 @@ public class InternshipService {
 
     private static final int MAX_TARGET_MAJOR_LENGTH = 150;
     private static final int MAX_TARGET_MAJORS = 10;
+    private static final int MAX_EXTERNAL_APPLICATION_URL_LENGTH = 2048;
+
+    // Deliberately mirrors CompanyProfileRequest's website pattern: case-insensitive,
+    // http(s)-only (so javascript:, file:, data:, etc. can never match), host + TLD required.
+    private static final Pattern EXTERNAL_APPLICATION_URL_PATTERN =
+            Pattern.compile("(?i)^https?://[\\w.-]+\\.[a-z]{2,}(:\\d{1,5})?(/\\S*)?$");
 
     private final InternshipRepository internshipRepository;
     private final CompanyProfileRepository companyProfileRepository;
@@ -56,6 +63,11 @@ public class InternshipService {
         internship.setTargetMajors(normalizeTargetMajors(
                 request.targetMajors() != null ? request.targetMajors() : List.of()));
         internship.setMinimumAcademicYear(request.minimumAcademicYear());
+
+        String validatedUrl = resolveFinalExternalApplicationUrl(
+                request.applicationMethod(), normalizeExternalApplicationUrl(request.externalApplicationUrl()));
+        internship.setApplicationMethod(request.applicationMethod());
+        internship.setExternalApplicationUrl(validatedUrl);
 
         Internship saved = internshipRepository.saveAndFlush(internship);
         return toResponse(saved, profile);
@@ -128,6 +140,8 @@ public class InternshipService {
         if (request.minimumAcademicYear() != null) {
             internship.setMinimumAcademicYear(resolveMinimumAcademicYear(request.minimumAcademicYear()));
         }
+
+        applyApplicationMethodAndUrl(internship, request.applicationMethod(), request.externalApplicationUrl());
 
         Internship saved = internshipRepository.saveAndFlush(internship);
         return toResponse(saved, profile);
@@ -269,6 +283,98 @@ public class InternshipService {
         return value;
     }
 
+    /**
+     * Computes and applies the FINAL applicationMethod + externalApplicationUrl pair for a
+     * PATCH — never just the individually-supplied field in isolation, per the INTERNAL/
+     * EXTERNAL pairing invariant also enforced by the V12 DB CHECK constraint.
+     * applicationMethod is a plain enum: null means "omitted, keep current method" (there is
+     * no "clear" state for a required field). externalApplicationUrl mirrors
+     * minimumAcademicYear's JsonNode tri-state: a null reference means omitted (keep the
+     * current URL, UNLESS the final method is INTERNAL, in which case it is safely cleared —
+     * this is how "PATCH applicationMethod=INTERNAL" alone moves an EXTERNAL internship back
+     * without the caller having to separately null out the URL), an explicit JSON null clears
+     * it, and a string sets/replaces it (blank is treated the same as absent/null).
+     */
+    private void applyApplicationMethodAndUrl(Internship internship, ApplicationMethod requestedMethod, JsonNode urlNode) {
+        ApplicationMethod finalMethod = requestedMethod != null ? requestedMethod : internship.getApplicationMethod();
+
+        String finalUrl;
+        if (urlNode == null) {
+            finalUrl = finalMethod == ApplicationMethod.INTERNAL
+                    ? null
+                    : internship.getExternalApplicationUrl();
+        } else if (urlNode.isNull()) {
+            finalUrl = null;
+        } else if (urlNode.isTextual()) {
+            finalUrl = normalizeExternalApplicationUrl(urlNode.asText());
+        } else {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "External application URL must be a string or null");
+        }
+
+        // Validate BEFORE mutating the managed entity: resolveFinalExternalApplicationUrl can
+        // throw, and an entity mutation that happened first would stay dirty in the Hibernate
+        // session (visible to later reads in the same transaction) even though the overall
+        // request fails and nothing is actually persisted.
+        String validatedUrl = resolveFinalExternalApplicationUrl(finalMethod, finalUrl);
+
+        internship.setApplicationMethod(finalMethod);
+        internship.setExternalApplicationUrl(validatedUrl);
+    }
+
+    /** Blank (including whitespace-only) is treated as "no URL provided", not a format error. */
+    private String normalizeExternalApplicationUrl(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Enforces the same INTERNAL/EXTERNAL pairing the V12 CHECK constraint enforces at the DB
+     * level, returning the URL to actually persist (validated + trimmed for EXTERNAL, always
+     * null for INTERNAL). {@code normalizedUrl} must already be blank-normalized to null.
+     */
+    private String resolveFinalExternalApplicationUrl(ApplicationMethod method, String normalizedUrl) {
+        if (method == ApplicationMethod.EXTERNAL) {
+            if (normalizedUrl == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "External application URL is required when application method is EXTERNAL");
+            }
+            return requireValidExternalApplicationUrl(normalizedUrl);
+        }
+
+        if (normalizedUrl != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "External application URL must be empty when application method is INTERNAL");
+        }
+
+        return null;
+    }
+
+    /**
+     * Format/length check for a non-blank external application URL. The http(s)-only pattern
+     * (mirroring CompanyProfileRequest's website validation) rejects javascript:, file:,
+     * data:, and any other non-http(s) scheme outright — they simply never match.
+     */
+    private String requireValidExternalApplicationUrl(String trimmedUrl) {
+        if (trimmedUrl.length() > MAX_EXTERNAL_APPLICATION_URL_LENGTH) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "External application URL must be at most " + MAX_EXTERNAL_APPLICATION_URL_LENGTH + " characters");
+        }
+
+        if (!EXTERNAL_APPLICATION_URL_PATTERN.matcher(trimmedUrl).matches()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "External application URL must be a valid http(s) URL");
+        }
+
+        return trimmedUrl;
+    }
+
     private InternshipResponse toResponse(Internship internship, CompanyProfile profile) {
         List<InternshipSkillResponse> skills = internship.getSkills().stream()
                 .sorted(Comparator.comparing(Skill::getName))
@@ -293,6 +399,8 @@ public class InternshipService {
                 skills,
                 targetMajors,
                 internship.getMinimumAcademicYear(),
+                internship.getApplicationMethod(),
+                internship.getExternalApplicationUrl(),
                 internship.getCreatedAt(),
                 internship.getUpdatedAt()
         );

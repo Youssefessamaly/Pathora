@@ -159,6 +159,19 @@ class InternInternshipFeedControllerTest {
         return internshipRepository.saveAndFlush(internship);
     }
 
+    private Internship createExternalInternship(
+            List<String> requiredSkillNames,
+            Set<String> targetMajors,
+            LocalDate applicationDeadline,
+            InternshipStatus status,
+            String externalApplicationUrl
+    ) {
+        Internship internship = createInternship(requiredSkillNames, targetMajors, applicationDeadline, status, null);
+        internship.setApplicationMethod(ApplicationMethod.EXTERNAL);
+        internship.setExternalApplicationUrl(externalApplicationUrl);
+        return internshipRepository.saveAndFlush(internship);
+    }
+
     private InternProfile createInternProfileWithAcademicStanding(
             User user,
             AcademicLevel academicLevel,
@@ -640,5 +653,51 @@ class InternInternshipFeedControllerTest {
                 .andExpect(jsonPath("$[0].matchedSkillCount").value(3))
                 .andExpect(jsonPath("$[1].id").value(profileOnlyMatch.getId().toString()))
                 .andExpect(jsonPath("$[1].matchedSkillCount").value(1));
+    }
+
+    // 30. intern feed exposes applicationMethod/externalApplicationUrl for INTERNAL internships
+    @Test
+    void internFeedExposesInternalApplicationMethod() throws Exception {
+        createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
+        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].applicationMethod").value("INTERNAL"))
+                .andExpect(jsonPath("$[0].externalApplicationUrl").doesNotExist());
+    }
+
+    // 31. intern feed/detail expose applicationMethod/externalApplicationUrl for EXTERNAL internships
+    @Test
+    void internFeedAndDetailExposeExternalApplicationMethodAndUrl() throws Exception {
+        createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
+        Internship internship = createExternalInternship(
+                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN,
+                "https://careers.example.com/apply");
+
+        mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$[0].externalApplicationUrl").value("https://careers.example.com/apply"));
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").value("https://careers.example.com/apply"));
+    }
+
+    // 32. applicationMethod/externalApplicationUrl never influence relevance scoring
+    @Test
+    void applicationMethodNeverAffectsRelevanceScoring() throws Exception {
+        createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
+        Internship external = createExternalInternship(
+                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN,
+                "https://careers.example.com/apply");
+
+        mockMvc.perform(get("/api/v1/intern/internships/" + external.getId()).with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relevancePercentage").value(100))
+                .andExpect(jsonPath("$.matchedSkillCount").value(2))
+                .andExpect(jsonPath("$.majorMatch").value(true));
     }
 }

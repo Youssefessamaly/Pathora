@@ -24,6 +24,12 @@ import java.util.UUID;
  * component reference null when the key is absent, and produces a non-null NullNode (whose
  * isNull() is true) when the key is explicitly present with a JSON null value — see
  * InternshipService for how the three states are interpreted.
+ * externalApplicationUrl uses the same JsonNode tri-state for the same reason: omitted means
+ * "leave the URL as-is", an explicit JSON null means "clear it" (the only way to move an
+ * EXTERNAL internship back to INTERNAL), and a string means "set/replace it". applicationMethod
+ * itself is a plain enum (omitted = unchanged) since there is no "clear" state for a required
+ * field. InternshipService computes the FINAL applicationMethod + externalApplicationUrl pair
+ * together and validates that combination, not each field in isolation.
  */
 public record InternshipUpdateRequest(
 
@@ -51,7 +57,11 @@ public record InternshipUpdateRequest(
         @Size(max = 10, message = "At most 10 target majors are allowed")
         List<String> targetMajors,
 
-        JsonNode minimumAcademicYear
+        JsonNode minimumAcademicYear,
+
+        ApplicationMethod applicationMethod,
+
+        JsonNode externalApplicationUrl
 
 ) {
 }

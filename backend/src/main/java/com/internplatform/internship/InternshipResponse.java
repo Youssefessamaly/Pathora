@@ -19,6 +19,8 @@ public record InternshipResponse(
         List<InternshipSkillResponse> skills,
         List<String> targetMajors,
         Integer minimumAcademicYear,
+        ApplicationMethod applicationMethod,
+        String externalApplicationUrl,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

@@ -66,6 +66,19 @@ public class Internship {
     @Column(name = "status", nullable = false, length = 20)
     private InternshipStatus status;
 
+    /**
+     * INTERNAL = applications are hosted/tracked inside Pathora (externalApplicationUrl is
+     * always null). EXTERNAL = Apply sends the intern to the company's own application page
+     * (externalApplicationUrl is always a validated http(s) URL). The DB CHECK constraint
+     * (V12) enforces this pairing as a last line of defense; the service validates it first.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "application_method", nullable = false, length = 20)
+    private ApplicationMethod applicationMethod;
+
+    @Column(name = "external_application_url", length = 2048)
+    private String externalApplicationUrl;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -100,6 +113,9 @@ public class Internship {
     public Internship(UUID companyProfileId) {
         this.companyProfileId = companyProfileId;
         this.status = InternshipStatus.OPEN;
+        // Safe default matching V12's backfill of pre-existing rows — callers that care
+        // (InternshipService) overwrite this explicitly from the validated request.
+        this.applicationMethod = ApplicationMethod.INTERNAL;
     }
 
     @PrePersist
@@ -197,6 +213,22 @@ public class Internship {
 
     public void setStatus(InternshipStatus status) {
         this.status = status;
+    }
+
+    public ApplicationMethod getApplicationMethod() {
+        return applicationMethod;
+    }
+
+    public void setApplicationMethod(ApplicationMethod applicationMethod) {
+        this.applicationMethod = applicationMethod;
+    }
+
+    public String getExternalApplicationUrl() {
+        return externalApplicationUrl;
+    }
+
+    public void setExternalApplicationUrl(String externalApplicationUrl) {
+        this.externalApplicationUrl = externalApplicationUrl;
     }
 
     public OffsetDateTime getCreatedAt() {

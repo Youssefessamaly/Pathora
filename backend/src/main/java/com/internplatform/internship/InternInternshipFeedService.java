@@ -232,6 +232,8 @@ public class InternInternshipFeedService {
                 skills,
                 targetMajors,
                 internship.getMinimumAcademicYear(),
+                internship.getApplicationMethod(),
+                internship.getExternalApplicationUrl(),
                 scored.relevancePercentage(),
                 scored.matchedSkillCount(),
                 scored.totalRequiredSkillCount(),

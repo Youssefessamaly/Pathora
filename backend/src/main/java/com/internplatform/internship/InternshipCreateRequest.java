@@ -47,7 +47,19 @@ public record InternshipCreateRequest(
 
         @Min(value = 1, message = "Minimum academic year must be between 1 and 6")
         @Max(value = 6, message = "Minimum academic year must be between 1 and 6")
-        Integer minimumAcademicYear
+        Integer minimumAcademicYear,
+
+        @NotNull(message = "Application method is required")
+        ApplicationMethod applicationMethod,
+
+        /**
+         * Required (and format-validated) only when applicationMethod is EXTERNAL; must be
+         * null/blank for INTERNAL, where a blank value is accepted and silently stored as null
+         * rather than rejected. That blank-tolerant, method-dependent pairing can't be
+         * expressed with annotations alone (a @Pattern would reject "" even for INTERNAL), so
+         * InternshipService validates this field entirely — see resolveExternalApplicationUrl.
+         */
+        String externalApplicationUrl
 
 ) {
 }

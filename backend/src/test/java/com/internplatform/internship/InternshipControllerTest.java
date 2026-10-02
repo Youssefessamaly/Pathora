@@ -137,6 +137,7 @@ class InternshipControllerTest {
         body.put("startDate", LocalDate.now().plusMonths(2).toString());
         body.put("durationMonths", 3);
         body.put("skillIds", List.of(skillId1.toString()));
+        body.put("applicationMethod", "INTERNAL");
         return body;
     }
 
@@ -613,5 +614,243 @@ class InternshipControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(body)))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ===== Application method (INTERNAL vs EXTERNAL) =====
+
+    // 32. CREATE: INTERNAL without URL succeeds, and the response exposes both fields
+    @Test
+    void createInternalWithoutUrlSucceeds() throws Exception {
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(validCreateBody())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.applicationMethod").value("INTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").doesNotExist());
+    }
+
+    // 33. CREATE: INTERNAL with a URL supplied is rejected
+    @Test
+    void createInternalWithUrlRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("applicationMethod", "INTERNAL");
+        body.put("externalApplicationUrl", "https://careers.example.com/apply");
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 34. CREATE: EXTERNAL with a valid HTTPS URL succeeds, trimmed and exposed in the response
+    @Test
+    void createExternalWithValidHttpsUrlSucceeds() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("applicationMethod", "EXTERNAL");
+        body.put("externalApplicationUrl", "  https://careers.example.com/apply  ");
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").value("https://careers.example.com/apply"));
+    }
+
+    // 35. CREATE: EXTERNAL without a URL is rejected
+    @Test
+    void createExternalWithoutUrlRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("applicationMethod", "EXTERNAL");
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 36. CREATE: EXTERNAL with a structurally invalid URL is rejected
+    @Test
+    void createExternalWithInvalidUrlRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("applicationMethod", "EXTERNAL");
+        body.put("externalApplicationUrl", "not a url");
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 37. CREATE: a dangerous/non-http(s) scheme is rejected
+    @Test
+    void createExternalWithJavascriptSchemeRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("applicationMethod", "EXTERNAL");
+        body.put("externalApplicationUrl", "javascript:alert(1)");
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 38. CREATE without an applicationMethod at all is rejected (now required)
+    @Test
+    void createWithoutApplicationMethodRejected() throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.remove("applicationMethod");
+
+        mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    private UUID createExternalInternship(String url) throws Exception {
+        Map<String, Object> body = new HashMap<>(validCreateBody());
+        body.put("applicationMethod", "EXTERNAL");
+        body.put("externalApplicationUrl", url);
+
+        String json = mockMvc.perform(post("/api/v1/company/internships")
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(body)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        return UUID.fromString(objectMapper.readTree(json).get("id").asText());
+    }
+
+    // 39. PATCH: INTERNAL -> EXTERNAL with a URL succeeds
+    @Test
+    void patchInternalToExternalWithUrlSucceeds() throws Exception {
+        UUID internshipId = createInternship(companyUser);
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of(
+                                "applicationMethod", "EXTERNAL",
+                                "externalApplicationUrl", "https://careers.example.com/apply"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").value("https://careers.example.com/apply"));
+    }
+
+    // 40. PATCH: INTERNAL -> EXTERNAL without supplying a URL is rejected, and nothing changes
+    @Test
+    void patchInternalToExternalWithoutUrlRejected() throws Exception {
+        UUID internshipId = createInternship(companyUser);
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("applicationMethod", "EXTERNAL"))))
+                .andExpect(status().isBadRequest());
+
+        Internship unchanged = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(unchanged.getApplicationMethod()).isEqualTo(ApplicationMethod.INTERNAL);
+        assertThat(unchanged.getExternalApplicationUrl()).isNull();
+    }
+
+    // 41. PATCH: replacing an EXTERNAL internship's URL succeeds
+    @Test
+    void patchExternalUrlReplacementSucceeds() throws Exception {
+        UUID internshipId = createExternalInternship("https://careers.example.com/apply");
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("externalApplicationUrl", "https://jobs.example.com/new-role"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").value("https://jobs.example.com/new-role"));
+    }
+
+    // 42. PATCH: an invalid replacement URL is rejected, and the previous URL is preserved
+    @Test
+    void patchExternalUrlReplacementWithInvalidUrlRejected() throws Exception {
+        UUID internshipId = createExternalInternship("https://careers.example.com/apply");
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("externalApplicationUrl", "ftp://example.com/apply"))))
+                .andExpect(status().isBadRequest());
+
+        Internship unchanged = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(unchanged.getExternalApplicationUrl()).isEqualTo("https://careers.example.com/apply");
+    }
+
+    // 43. PATCH: EXTERNAL -> INTERNAL (method only) clears the URL safely
+    @Test
+    void patchExternalToInternalClearsUrl() throws Exception {
+        UUID internshipId = createExternalInternship("https://careers.example.com/apply");
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("applicationMethod", "INTERNAL"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationMethod").value("INTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").doesNotExist());
+
+        Internship updated = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(updated.getApplicationMethod()).isEqualTo(ApplicationMethod.INTERNAL);
+        assertThat(updated.getExternalApplicationUrl()).isNull();
+    }
+
+    // 44. PATCH: an unrelated field change preserves the existing method + URL
+    @Test
+    void patchUnrelatedFieldPreservesApplicationMethodAndUrl() throws Exception {
+        UUID internshipId = createExternalInternship("https://careers.example.com/apply");
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("title", "Updated Title Only"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Updated Title Only"))
+                .andExpect(jsonPath("$.applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").value("https://careers.example.com/apply"));
+    }
+
+    // 45. PATCH: INTERNAL + a non-blank URL supplied without changing method is rejected
+    @Test
+    void patchInternalWithSuppliedNonBlankUrlRejected() throws Exception {
+        UUID internshipId = createInternship(companyUser);
+
+        mockMvc.perform(patch("/api/v1/company/internships/" + internshipId)
+                        .with(asCompany())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(Map.of("externalApplicationUrl", "https://careers.example.com/apply"))))
+                .andExpect(status().isBadRequest());
+
+        Internship unchanged = internshipRepository.findById(internshipId).orElseThrow();
+        assertThat(unchanged.getExternalApplicationUrl()).isNull();
+    }
+
+    // 46. GET list/detail expose applicationMethod/externalApplicationUrl for the owning company
+    @Test
+    void companyGetExposesApplicationMethodAndUrl() throws Exception {
+        UUID internshipId = createExternalInternship("https://careers.example.com/apply");
+
+        mockMvc.perform(get("/api/v1/company/internships/" + internshipId).with(asCompany()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$.externalApplicationUrl").value("https://careers.example.com/apply"));
+
+        mockMvc.perform(get("/api/v1/company/internships").with(asCompany()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].applicationMethod").value("EXTERNAL"))
+                .andExpect(jsonPath("$[0].externalApplicationUrl").value("https://careers.example.com/apply"));
     }
 }
