@@ -50,6 +50,22 @@ public class CvStorageService {
         return storageKey;
     }
 
+    /**
+     * Reads back the bytes previously stored under the given key — used to make an
+     * independent physical copy of a CV (e.g. an application-time snapshot) rather than
+     * sharing a storage key that a later profile CV replacement would delete out from under it.
+     */
+    public byte[] read(String storageKey) {
+        try {
+            return Files.readAllBytes(resolveWithinBaseDirectory(storageKey));
+        } catch (IOException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Unable to read the stored file"
+            );
+        }
+    }
+
     /** Best-effort delete of a previously stored file; never throws if it's already gone. */
     public void delete(String storageKey) {
         if (storageKey == null) {
