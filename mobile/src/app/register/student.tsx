@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
@@ -8,12 +8,16 @@ import { PathoraButton } from '@/components/pathora-button';
 import { PathoraCheckbox } from '@/components/pathora-checkbox';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
+import { useAuth } from '@/context/auth-context';
 import { ApiError, NetworkError, registerIntern } from '@/lib/api';
+import { getAccessToken } from '@/lib/auth-token';
+import { resolveInternPostAuthRoute } from '@/lib/onboarding';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function StudentRegistrationScreen() {
   const router = useRouter();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,15 +42,35 @@ export default function StudentRegistrationScreen() {
     setSubmitError(null);
     setIsSubmitting(true);
 
+    const trimmedEmail = email.trim();
+
     try {
-      await registerIntern({ email: email.trim(), password });
-      Alert.alert('Account created', 'Your student account was created successfully.');
+      await registerIntern({ email: trimmedEmail, password });
     } catch (error) {
       if (error instanceof ApiError || error instanceof NetworkError) {
         setSubmitError(error.message);
       } else {
         setSubmitError('Something went wrong. Please try again.');
       }
+      setIsSubmitting(false);
+      return;
+    }
+
+    // The account now exists. The register endpoint doesn't return a session, so sign in
+    // immediately with the same credentials still held in form state — the intern must feel
+    // logged in right away, never bounced back to the Login screen after a successful signup.
+    try {
+      await signIn({ email: trimmedEmail, password });
+      const token = await getAccessToken();
+      if (!token) {
+        throw new Error('Missing access token after sign-in');
+      }
+      router.replace(await resolveInternPostAuthRoute(token));
+    } catch {
+      // Registration itself succeeded — only the automatic sign-in failed (e.g. a network
+      // hiccup). Don't claim registration failed; send them to log in instead of leaving
+      // them stuck on this form or silently retrying with the password still in memory.
+      router.replace('/login');
     } finally {
       setIsSubmitting(false);
     }

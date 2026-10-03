@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
@@ -14,6 +14,7 @@ import { formatDisplayDate } from '@/lib/date';
 import {
   buildMatchExplanations,
   formatMinimumAcademicYearEligibility,
+  isValidExternalApplicationUrl,
   WORK_MODE_LABELS,
 } from '@/lib/internship-options';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
@@ -34,6 +35,8 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
   const [internship, setInternship] = useState<InternInternship | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [isOpeningExternalUrl, setIsOpeningExternalUrl] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) {
@@ -64,6 +67,41 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
       load();
     }, [load]),
   );
+
+  const handleApplyPress = async (current: InternInternship) => {
+    setApplyError(null);
+
+    // EXTERNAL and INTERNAL are mutually exclusive, enforced by an unconditional `return` at
+    // the end of this branch — nothing below it can execute for an EXTERNAL internship, no
+    // matter what Linking does. Never opens the Pathora form, never fetches application
+    // questions, never calls the internal application endpoint. Backend data is
+    // authoritative; only a validated http(s) URL is ever opened.
+    if (current.applicationMethod === 'EXTERNAL') {
+      const url = current.externalApplicationUrl;
+      if (!url || !isValidExternalApplicationUrl(url)) {
+        setApplyError('This internship’s application link is unavailable right now.');
+        return;
+      }
+
+      setIsOpeningExternalUrl(true);
+      try {
+        const canOpen = await Linking.canOpenURL(url);
+        if (!canOpen) {
+          setApplyError('Unable to open the company’s application page.');
+          return;
+        }
+        await Linking.openURL(url);
+      } catch {
+        setApplyError('Unable to open the company’s application page.');
+      } finally {
+        setIsOpeningExternalUrl(false);
+      }
+      return;
+    }
+
+    // INTERNAL only — reached only when the EXTERNAL branch above did not return.
+    router.push({ pathname: '/intern/internships/[id]/apply', params: { id: current.id } });
+  };
 
   if (notFound) {
     return (
@@ -187,6 +225,22 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
             </Text>
           )}
         </View>
+
+        {applyError && <Text style={styles.applyError}>{applyError}</Text>}
+
+        <PathoraButton
+          label={
+            internship.applicationMethod === 'INTERNAL'
+              ? 'Apply through Pathora'
+              : isOpeningExternalUrl
+                ? 'Opening…'
+                : 'Apply on company website'
+          }
+          variant="primary"
+          onPress={() => handleApplyPress(internship)}
+          disabled={isOpeningExternalUrl}
+          style={styles.applyButton}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -360,5 +414,15 @@ const styles = StyleSheet.create({
     fontFamily: PathoraFonts.en.regular,
     fontSize: 13,
     color: PathoraColors.teal700,
+  },
+  applyError: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 13,
+    color: PathoraColors.error,
+    marginBottom: PathoraSpacing[12],
+    textAlign: 'center',
+  },
+  applyButton: {
+    marginBottom: PathoraSpacing[8],
   },
 });

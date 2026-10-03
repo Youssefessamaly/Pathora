@@ -4,6 +4,7 @@ import { SymbolView } from 'expo-symbols';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ApplicationMethodField } from '@/components/application-method-field';
 import { AuthBackButton } from '@/components/auth-back-button';
 import { DateInputGroup } from '@/components/date-input-group';
 import { MajorTagInput } from '@/components/major-tag-input';
@@ -18,11 +19,13 @@ import { useAuth } from '@/context/auth-context';
 import {
   createCompanyInternship,
   getInternSkills,
+  type ApplicationMethod,
   type InternProfileSkill,
   type InternshipWorkMode,
 } from '@/lib/api';
 import { parseLocalDateParts } from '@/lib/date';
 import {
+  isValidExternalApplicationUrl,
   MINIMUM_ACADEMIC_YEAR_OPTIONS,
   optionValueToMinimumAcademicYear,
   WORK_MODE_OPTIONS,
@@ -54,6 +57,10 @@ function NewInternshipScreen() {
 
   const [targetMajors, setTargetMajors] = useState<string[]>([]);
   const [minimumAcademicYear, setMinimumAcademicYear] = useState('NONE');
+
+  const [applicationMethod, setApplicationMethod] = useState<ApplicationMethod | null>(null);
+  const [externalUrl, setExternalUrl] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -98,10 +105,21 @@ function NewInternshipScreen() {
     deadlineDay.length > 0 &&
     deadlineMonth.length > 0 &&
     deadlineYear.length === 4 &&
-    selectedSkillIds.length > 0;
+    selectedSkillIds.length > 0 &&
+    applicationMethod !== null &&
+    (applicationMethod === 'INTERNAL' || externalUrl.trim().length > 0);
+
+  const handleApplicationMethodChange = (method: ApplicationMethod) => {
+    setApplicationMethod(method);
+    setUrlError(null);
+    if (method === 'INTERNAL') {
+      // Hidden fields never carry stale state into the submitted payload.
+      setExternalUrl('');
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!canSubmit || isSubmitting || !token || !workMode) {
+    if (!canSubmit || isSubmitting || !token || !workMode || !applicationMethod) {
       return;
     }
 
@@ -121,11 +139,18 @@ function NewInternshipScreen() {
       startDateIso = start.iso;
     }
 
+    const trimmedUrl = externalUrl.trim();
+    if (applicationMethod === 'EXTERNAL' && !isValidExternalApplicationUrl(trimmedUrl)) {
+      setUrlError('Enter a valid http:// or https:// URL.');
+      return;
+    }
+
     setSubmitError(null);
+    setUrlError(null);
     setIsSubmitting(true);
 
     try {
-      await createCompanyInternship(token, {
+      const created = await createCompanyInternship(token, {
         title: title.trim(),
         description: description.trim(),
         location: location.trim(),
@@ -136,7 +161,19 @@ function NewInternshipScreen() {
         skillIds: selectedSkillIds,
         targetMajors,
         minimumAcademicYear: optionValueToMinimumAcademicYear(minimumAcademicYear),
+        applicationMethod,
+        ...(applicationMethod === 'EXTERNAL' ? { externalApplicationUrl: trimmedUrl } : {}),
       });
+
+      if (applicationMethod === 'INTERNAL') {
+        // Give the company an obvious next step: configure questions for the internship
+        // they just created. Replace (not push) for the same back-stack reasons as below.
+        router.replace({
+          pathname: '/company/internships/[id]/application-questions',
+          params: { id: created.id },
+        });
+        return;
+      }
 
       // Replace rather than push so going back doesn't return to a stale form and
       // re-submitting isn't possible via the hardware/gesture back action.
@@ -260,6 +297,17 @@ function NewInternshipScreen() {
                 Only students in this university year or above will be eligible.
               </Text>
             </View>
+
+            <ApplicationMethodField
+              value={applicationMethod}
+              onChange={handleApplicationMethodChange}
+              externalUrl={externalUrl}
+              onChangeExternalUrl={(text) => {
+                setExternalUrl(text);
+                setUrlError(null);
+              }}
+              urlError={urlError}
+            />
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}

@@ -1,4 +1,4 @@
-import { ApiError, NetworkError, type CompanyProfile, type InternProfile } from '@/lib/api';
+import { ApiError, getInternProfileOrNull, NetworkError, type CompanyProfile, type InternProfile } from '@/lib/api';
 
 export type OnboardingRoute = '/onboarding/personal' | '/onboarding/education' | '/onboarding/skills';
 
@@ -62,6 +62,17 @@ export function resolveFirstIncompleteOnboardingStep(profile: InternProfile | nu
   // All individual step checks passed but the backend hasn't marked onboarding
   // complete yet (e.g. the user never pressed Finish) — land on the last step.
   return '/onboarding/skills';
+}
+
+/**
+ * Resolves where an INTERN should land immediately after authenticating — login and
+ * register-then-auto-login alike call this, so the two flows can never disagree about
+ * onboarding state. Throws if the profile can't be fetched; callers should catch and show
+ * their own "couldn't load profile" message rather than guessing where to send the user.
+ */
+export async function resolveInternPostAuthRoute(token: string): Promise<OnboardingRoute | '/intern'> {
+  const profile = await getInternProfileOrNull(token);
+  return resolveFirstIncompleteOnboardingStep(profile) ?? '/intern';
 }
 
 function isCompanyStep1Incomplete(profile: CompanyProfile): boolean {

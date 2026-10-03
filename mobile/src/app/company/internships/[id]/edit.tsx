@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ApplicationMethodField } from '@/components/application-method-field';
 import { AuthBackButton } from '@/components/auth-back-button';
 import { DateInputGroup } from '@/components/date-input-group';
 import { MajorTagInput } from '@/components/major-tag-input';
@@ -28,11 +29,13 @@ import {
   getCompanyInternship,
   getInternSkills,
   updateCompanyInternship,
+  type ApplicationMethod,
   type InternProfileSkill,
   type InternshipWorkMode,
 } from '@/lib/api';
 import { parseLocalDateParts, splitIsoDate } from '@/lib/date';
 import {
+  isValidExternalApplicationUrl,
   MINIMUM_ACADEMIC_YEAR_OPTIONS,
   minimumAcademicYearToOptionValue,
   optionValueToMinimumAcademicYear,
@@ -68,6 +71,10 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
 
   const [targetMajors, setTargetMajors] = useState<string[]>([]);
   const [minimumAcademicYear, setMinimumAcademicYear] = useState('NONE');
+
+  const [applicationMethod, setApplicationMethod] = useState<ApplicationMethod | null>(null);
+  const [externalUrl, setExternalUrl] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -107,6 +114,8 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
         setSelectedSkillIds(internship.skills.map((skill) => skill.id));
         setTargetMajors(internship.targetMajors);
         setMinimumAcademicYear(minimumAcademicYearToOptionValue(internship.minimumAcademicYear));
+        setApplicationMethod(internship.applicationMethod);
+        setExternalUrl(internship.externalApplicationUrl ?? '');
       } catch (error) {
         if (!cancelled) {
           setLoadError(describeOnboardingError(error));
@@ -141,10 +150,22 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
     deadlineDay.length > 0 &&
     deadlineMonth.length > 0 &&
     deadlineYear.length === 4 &&
-    selectedSkillIds.length > 0;
+    selectedSkillIds.length > 0 &&
+    applicationMethod !== null &&
+    (applicationMethod === 'INTERNAL' || externalUrl.trim().length > 0);
+
+  const handleApplicationMethodChange = (method: ApplicationMethod) => {
+    setApplicationMethod(method);
+    setUrlError(null);
+    if (method === 'INTERNAL') {
+      // Hidden fields never carry stale state into the submitted payload — the backend
+      // auto-clears the stored URL server-side once applicationMethod resolves to INTERNAL.
+      setExternalUrl('');
+    }
+  };
 
   const handleSubmit = async () => {
-    if (!canSubmit || isSubmitting || !token || !workMode) {
+    if (!canSubmit || isSubmitting || !token || !workMode || !applicationMethod) {
       return;
     }
 
@@ -164,7 +185,14 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
       startDateIso = start.iso;
     }
 
+    const trimmedUrl = externalUrl.trim();
+    if (applicationMethod === 'EXTERNAL' && !isValidExternalApplicationUrl(trimmedUrl)) {
+      setUrlError('Enter a valid http:// or https:// URL.');
+      return;
+    }
+
     setSubmitError(null);
+    setUrlError(null);
     setIsSubmitting(true);
 
     try {
@@ -182,6 +210,10 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
         // previously-set value — the backend PATCH only clears on an explicit JSON null, and
         // an omitted key would leave the old restriction in place.
         minimumAcademicYear: optionValueToMinimumAcademicYear(minimumAcademicYear),
+        applicationMethod,
+        // Switching to INTERNAL omits this entirely — the backend clears the stored URL
+        // itself once applicationMethod resolves to INTERNAL (see CompanyInternshipUpdatePayload).
+        ...(applicationMethod === 'EXTERNAL' ? { externalApplicationUrl: trimmedUrl } : {}),
       });
 
       router.replace({ pathname: '/company/internships/[id]', params: { id: internshipId } });
@@ -311,6 +343,17 @@ function EditInternshipScreen({ internshipId }: { internshipId: string }) {
                 Only students in this university year or above will be eligible.
               </Text>
             </View>
+
+            <ApplicationMethodField
+              value={applicationMethod}
+              onChange={handleApplicationMethodChange}
+              externalUrl={externalUrl}
+              onChangeExternalUrl={(text) => {
+                setExternalUrl(text);
+                setUrlError(null);
+              }}
+              urlError={urlError}
+            />
           </View>
 
           {submitError && <Text style={styles.submitError}>{submitError}</Text>}

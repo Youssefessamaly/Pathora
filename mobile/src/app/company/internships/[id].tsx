@@ -10,7 +10,11 @@ import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/co
 import { useAuth } from '@/context/auth-context';
 import { closeCompanyInternship, getCompanyInternship, type CompanyInternship } from '@/lib/api';
 import { formatDisplayDate } from '@/lib/date';
-import { formatMinimumAcademicYearLabel, WORK_MODE_LABELS } from '@/lib/internship-options';
+import {
+  APPLICATION_METHOD_LABELS,
+  formatMinimumAcademicYearLabel,
+  WORK_MODE_LABELS,
+} from '@/lib/internship-options';
 import { describeOnboardingError } from '@/lib/onboarding';
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -135,6 +139,13 @@ function InternshipDetailsScreen() {
           )}
         </View>
 
+        <View style={styles.infoCard}>
+          <InfoRow label="Application process" value={APPLICATION_METHOD_LABELS[internship.applicationMethod]} />
+          {internship.applicationMethod === 'EXTERNAL' && internship.externalApplicationUrl && (
+            <InfoRow label="Application URL" value={internship.externalApplicationUrl} />
+          )}
+        </View>
+
         <View>
           <Text style={styles.label}>Required skills</Text>
           <View style={styles.chipsWrap}>
@@ -167,6 +178,20 @@ function InternshipDetailsScreen() {
           }
           style={styles.actionButton}
         />
+
+        {internship.applicationMethod === 'INTERNAL' && (
+          <PathoraButton
+            label="Manage application questions"
+            variant="secondary"
+            onPress={() =>
+              router.push({
+                pathname: '/company/internships/[id]/application-questions',
+                params: { id: internship.id },
+              })
+            }
+            style={styles.actionButton}
+          />
+        )}
 
         {isOpen && (
           <PathoraButton

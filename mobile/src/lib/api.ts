@@ -60,7 +60,7 @@ type RequestOptions = {
 };
 
 async function request<TResponse>(
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   body: unknown,
   options?: RequestOptions,
@@ -135,6 +135,15 @@ export function apiGet<TResponse>(path: string, options?: RequestOptions): Promi
  */
 export function apiPatch<TResponse>(path: string, body: unknown, options?: RequestOptions): Promise<TResponse> {
   return request<TResponse>('PATCH', path, body, options);
+}
+
+/**
+ * DELETEs a resource. Throws NetworkError on connection failure, ApiError on a non-2xx
+ * response (including 409 — callers that need to distinguish "locked" conflicts should check
+ * `error.status === 409` themselves rather than relying on the generic message).
+ */
+export function apiDelete<TResponse = void>(path: string, options?: RequestOptions): Promise<TResponse> {
+  return request<TResponse>('DELETE', path, undefined, options);
 }
 
 /**
@@ -458,6 +467,14 @@ export function completeCompanyOnboarding(token: string): Promise<CompanyProfile
 export type InternshipWorkMode = 'ONSITE' | 'HYBRID' | 'REMOTE';
 export type InternshipStatus = 'OPEN' | 'CLOSED';
 
+/**
+ * INTERNAL = applicants complete their application inside Pathora (optionally answering
+ * company-configured questions). EXTERNAL = applicants are redirected to the company's own
+ * application page at externalApplicationUrl. Never shown to users as this raw enum label —
+ * see APPLICATION_METHOD_LABELS in @/lib/internship-options.
+ */
+export type ApplicationMethod = 'INTERNAL' | 'EXTERNAL';
+
 export type CompanyInternship = {
   id: string;
   companyName: string;
@@ -472,6 +489,9 @@ export type CompanyInternship = {
   skills: InternProfileSkill[];
   targetMajors: string[];
   minimumAcademicYear: number | null;
+  applicationMethod: ApplicationMethod;
+  /** Always null for INTERNAL; a validated http(s) URL for EXTERNAL. */
+  externalApplicationUrl: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -487,6 +507,9 @@ export type CompanyInternshipCreatePayload = {
   skillIds: string[];
   targetMajors?: string[];
   minimumAcademicYear?: number | null;
+  applicationMethod: ApplicationMethod;
+  /** Required (and only meaningful) when applicationMethod is EXTERNAL; omit for INTERNAL. */
+  externalApplicationUrl?: string;
 };
 
 /**
@@ -498,6 +521,9 @@ export type CompanyInternshipCreatePayload = {
  * distinguishes omitted (preserve), a number (replace), and explicit null (clear) — Partial<>
  * alone can only express "omitted vs a value," never "present but null." Omit this key from
  * the request object entirely to preserve the existing value; include it as `null` to clear.
+ * externalApplicationUrl needs no such null-clearing from the client: the backend already
+ * auto-clears it whenever the final applicationMethod resolves to INTERNAL, so switching to
+ * INTERNAL only needs `applicationMethod: 'INTERNAL'` with externalApplicationUrl omitted.
  */
 export type CompanyInternshipUpdatePayload = Partial<{
   title: string;
@@ -509,6 +535,8 @@ export type CompanyInternshipUpdatePayload = Partial<{
   durationMonths: number;
   skillIds: string[];
   targetMajors: string[];
+  applicationMethod: ApplicationMethod;
+  externalApplicationUrl: string;
 }> & {
   minimumAcademicYear?: number | null;
 };
@@ -541,6 +569,85 @@ export function closeCompanyInternship(token: string, internshipId: string): Pro
 }
 
 /**
+ * A company-configured application question shown to interns applying to an INTERNAL
+ * internship. Never shown to users as this raw enum label — see
+ * APPLICATION_QUESTION_TYPE_LABELS in @/lib/internship-options.
+ */
+export type ApplicationQuestionType = 'SHORT_TEXT' | 'LONG_TEXT';
+
+export type ApplicationQuestion = {
+  id: string;
+  internshipId: string;
+  questionText: string;
+  questionType: ApplicationQuestionType;
+  required: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApplicationQuestionCreatePayload = {
+  questionText: string;
+  questionType: ApplicationQuestionType;
+  required: boolean;
+  displayOrder: number;
+};
+
+/**
+ * Partial update payload for PATCH .../application-questions/{questionId}.
+ * Matching the backend's PATCH semantics: only include the fields you want to change.
+ */
+export type ApplicationQuestionUpdatePayload = Partial<ApplicationQuestionCreatePayload>;
+
+/** Questions are returned in the order the backend considers canonical — never re-sort. */
+export function getCompanyApplicationQuestions(
+  token: string,
+  internshipId: string,
+): Promise<ApplicationQuestion[]> {
+  return apiGet<ApplicationQuestion[]>(`/company/internships/${internshipId}/application-questions`, { token });
+}
+
+/**
+ * Throws ApiError with status 409 if this internship has already received its first
+ * application — questions are frozen at that point. Callers should check
+ * `error.status === 409` to show a specific "locked" message rather than a generic one.
+ */
+export function createCompanyApplicationQuestion(
+  token: string,
+  internshipId: string,
+  payload: ApplicationQuestionCreatePayload,
+): Promise<ApplicationQuestion> {
+  return apiPost<ApplicationQuestion>(
+    `/company/internships/${internshipId}/application-questions`,
+    payload,
+    { token },
+  );
+}
+
+/** Same 409-when-locked behavior as createCompanyApplicationQuestion. */
+export function updateCompanyApplicationQuestion(
+  token: string,
+  internshipId: string,
+  questionId: string,
+  payload: ApplicationQuestionUpdatePayload,
+): Promise<ApplicationQuestion> {
+  return apiPatch<ApplicationQuestion>(
+    `/company/internships/${internshipId}/application-questions/${questionId}`,
+    payload,
+    { token },
+  );
+}
+
+/** Same 409-when-locked behavior as createCompanyApplicationQuestion. */
+export function deleteCompanyApplicationQuestion(
+  token: string,
+  internshipId: string,
+  questionId: string,
+): Promise<void> {
+  return apiDelete<void>(`/company/internships/${internshipId}/application-questions/${questionId}`, { token });
+}
+
+/**
  * An internship as seen by the authenticated INTERN's personalized feed/detail view.
  * Includes the same core internship fields as CompanyInternship plus backend-computed,
  * explainable relevance facts. The relevance numbers are never recalculated client-side —
@@ -561,6 +668,9 @@ export type InternInternship = {
   targetMajors: string[];
   /** Eligibility requirement only — does not contribute to relevancePercentage. */
   minimumAcademicYear: number | null;
+  applicationMethod: ApplicationMethod;
+  /** Always null for INTERNAL; a validated http(s) URL for EXTERNAL. */
+  externalApplicationUrl: string | null;
   relevancePercentage: number;
   matchedSkillCount: number;
   totalRequiredSkillCount: number;
@@ -577,4 +687,84 @@ export function getInternInternships(token: string): Promise<InternInternship[]>
 
 export function getInternInternship(token: string, internshipId: string): Promise<InternInternship> {
   return apiGet<InternInternship>(`/intern/internships/${internshipId}`, { token });
+}
+
+export type InternApplicationStatus = 'APPLIED' | 'ACCEPTED' | 'REJECTED';
+
+export type InternApplicationAnswer = {
+  questionId: string;
+  questionText: string;
+  questionType: ApplicationQuestionType;
+  required: boolean;
+  displayOrder: number;
+  answer: string;
+};
+
+/**
+ * One of the authenticated INTERN's own internal Pathora applications. companyName/
+ * internshipTitle may be null if the underlying internship can no longer be resolved.
+ * answers is empty on the compact list endpoint — only the single-application GET
+ * populates it.
+ */
+export type InternApplication = {
+  applicationId: string;
+  internshipId: string;
+  internshipTitle: string | null;
+  companyName: string | null;
+  status: InternApplicationStatus;
+  coverLetter: string | null;
+  linkedinUrl: string | null;
+  portfolioUrl: string | null;
+  cvFileName: string;
+  appliedAt: string;
+  updatedAt: string;
+  answers: InternApplicationAnswer[];
+};
+
+/** Most recently applied first — never re-sort client-side. */
+export function getInternApplications(token: string): Promise<InternApplication[]> {
+  return apiGet<InternApplication[]>('/intern/applications', { token });
+}
+
+/** Full detail — including the answers snapshot — for one of the intern's own applications. */
+export function getInternApplication(token: string, applicationId: string): Promise<InternApplication> {
+  return apiGet<InternApplication>(`/intern/applications/${applicationId}`, { token });
+}
+
+/**
+ * The INTERNAL internship's company-configured application questions, in the same
+ * displayOrder/createdAt order the company management screen shows them in — render exactly
+ * as returned, never reordered or hardcoded client-side.
+ */
+export function getInternApplicationQuestions(
+  token: string,
+  internshipId: string,
+): Promise<ApplicationQuestion[]> {
+  return apiGet<ApplicationQuestion[]>(`/intern/internships/${internshipId}/application-questions`, { token });
+}
+
+export type InternshipApplicationAnswerSubmission = {
+  questionId: string;
+  answer: string;
+};
+
+/**
+ * The internal Pathora application form. Deliberately carries no status/userId/
+ * internProfileId/internshipId/question metadata — identity and internship come from the
+ * authenticated token and the path, and every answer's question text/type/required/order is
+ * owned and snapshotted by the backend from its own question records, never sent by the client.
+ */
+export type InternshipApplicationSubmitPayload = {
+  coverLetter?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
+  answers?: InternshipApplicationAnswerSubmission[];
+};
+
+export function submitInternshipApplication(
+  token: string,
+  internshipId: string,
+  payload: InternshipApplicationSubmitPayload,
+): Promise<InternApplication> {
+  return apiPost<InternApplication>(`/intern/internships/${internshipId}/applications`, payload, { token });
 }

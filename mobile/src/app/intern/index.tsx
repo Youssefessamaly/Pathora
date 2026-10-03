@@ -1,77 +1,27 @@
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { InternshipFeedCard } from '@/components/internship-feed-card';
 import { PathoraButton } from '@/components/pathora-button';
+import { PathoraSearchBar } from '@/components/pathora-search-bar';
+import { ProfileStrengthCard } from '@/components/profile-strength-card';
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
 import {
   ApiError,
+  getInternApplications,
   getInternInternships,
   getInternProfileOrNull,
   type InternInternship,
   type InternProfile,
 } from '@/lib/api';
-import { formatDisplayDate } from '@/lib/date';
-import { formatMinimumAcademicYearLabel, WORK_MODE_LABELS } from '@/lib/internship-options';
+import { initialsFor } from '@/lib/initials';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
+import { calculateProfileStrength } from '@/lib/profile-strength';
 
-/**
- * Client-side gate for the intern home: requires an authenticated INTERN session.
- * The backend independently enforces this on every request regardless of this guard.
- */
-function InternHomeGuard({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const { isAuthenticated, isInitializing, user } = useAuth();
-  const isIntern = user?.role === 'INTERN';
-
-  useEffect(() => {
-    if (isInitializing) {
-      return;
-    }
-    if (!isAuthenticated) {
-      router.replace('/login');
-      return;
-    }
-    if (!isIntern) {
-      // Signed in, but as the wrong role — send them to their own home instead of
-      // bouncing an already-authenticated user back to the login screen.
-      router.replace(user?.role === 'COMPANY' ? '/company' : '/login');
-    }
-  }, [isInitializing, isAuthenticated, isIntern, user?.role, router]);
-
-  if (isInitializing || !isAuthenticated || !isIntern) {
-    return <View style={styles.guardFallback} />;
-  }
-
-  return <>{children}</>;
-}
-
-/** First letter of first + last name, falling back to the first letter of an email. */
-function initialsFor(firstName: string | null, lastName: string | null, email?: string): string {
-  const first = firstName?.trim()?.charAt(0) ?? '';
-  const last = lastName?.trim()?.charAt(0) ?? '';
-  const combined = `${first}${last}`.toUpperCase();
-  if (combined) {
-    return combined;
-  }
-  return (email?.trim()?.charAt(0) ?? '?').toUpperCase();
-}
-
-function companyInitials(companyName: string): string {
-  const words = companyName.trim().split(/\s+/).filter(Boolean);
-  const letters = words.slice(0, 2).map((word) => word.charAt(0));
-  return (letters.join('') || '?').toUpperCase();
-}
+const RECOMMENDED_PREVIEW_COUNT = 3;
 
 function greetingForHour(hour: number): string {
   if (hour < 12) {
@@ -83,65 +33,36 @@ function greetingForHour(hour: number): string {
   return 'Good evening';
 }
 
-function InternshipFeedCard({ item, onPress }: { item: InternInternship; onPress: () => void }) {
-  const skillNames = item.skills.slice(0, 4).map((skill) => skill.name);
-  const extraSkillCount = item.skills.length - skillNames.length;
-
+function StatCard({
+  label,
+  value,
+  active,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onPress?: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
-      <View style={styles.cardTopRow}>
-        <View style={styles.companyBadge}>
-          <Text style={styles.companyBadgeText}>{companyInitials(item.companyName)}</Text>
-        </View>
-        <View style={styles.cardHeaderText}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.cardCompany} numberOfLines={1}>
-            {item.companyName}
-          </Text>
-        </View>
-      </View>
-
-      <Text style={styles.cardMeta} numberOfLines={1}>
-        {item.location} · {WORK_MODE_LABELS[item.workMode]}
-        {item.minimumAcademicYear !== null && ` · ${formatMinimumAcademicYearLabel(item.minimumAcademicYear)}`}
-      </Text>
-
-      {skillNames.length > 0 && (
-        <View style={styles.chipsWrap}>
-          {skillNames.map((name) => (
-            <View key={name} style={styles.skillChip}>
-              <Text style={styles.skillChipText}>{name}</Text>
-            </View>
-          ))}
-          {extraSkillCount > 0 && (
-            <View style={styles.skillChip}>
-              <Text style={styles.skillChipText}>+{extraSkillCount}</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      <View style={styles.cardBottomRow}>
-        <Text style={styles.cardDeadline}>Deadline {formatDisplayDate(item.applicationDeadline)}</Text>
-        <View style={styles.matchPill}>
-          <Text style={styles.matchPillText}>{item.relevancePercentage}% match</Text>
-        </View>
-      </View>
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={({ pressed }) => [styles.statCard, pressed && onPress && styles.statCardPressed]}>
+      <Text style={[styles.statValue, !active && styles.statValueMuted]}>{value}</Text>
+      <Text style={[styles.statLabel, !active && styles.statLabelMuted]}>{label}</Text>
     </Pressable>
   );
 }
 
 function InternHomeScreen() {
   const router = useRouter();
-  const { user, token, signOut } = useAuth();
+  const { user, token } = useAuth();
 
   const [internships, setInternships] = useState<InternInternship[] | null>(null);
   const [profile, setProfile] = useState<InternProfile | null>(null);
+  const [applicationsCount, setApplicationsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -150,11 +71,7 @@ function InternHomeScreen() {
       return;
     }
     try {
-      const [data] = await Promise.all([
-        getInternInternships(token),
-        // Best-effort — only used for the greeting name, never blocks the feed.
-        getInternProfileOrNull(token).then(setProfile).catch(() => undefined),
-      ]);
+      const data = await getInternInternships(token);
       setInternships(data);
       setError(null);
     } catch (loadError) {
@@ -167,7 +84,17 @@ function InternHomeScreen() {
         return;
       }
       setError(describeOnboardingError(loadError));
+      return;
     }
+
+    // Best-effort secondary data for the greeting/profile-strength/stats — never blocks the
+    // feed (the one piece of this screen the intern actually came here for).
+    const [profileResult, applicationsResult] = await Promise.allSettled([
+      getInternProfileOrNull(token),
+      getInternApplications(token),
+    ]);
+    setProfile(profileResult.status === 'fulfilled' ? profileResult.value : null);
+    setApplicationsCount(applicationsResult.status === 'fulfilled' ? applicationsResult.value.length : 0);
   }, [token, router]);
 
   useFocusEffect(
@@ -182,31 +109,25 @@ function InternHomeScreen() {
     setRefreshing(false);
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    router.replace('/login');
+  const handleSearchPress = () => {
+    router.push('/intern/internships/index');
+  };
+
+  const handleSeeAllPress = () => {
+    router.push('/intern/internships/index');
+  };
+
+  const handleProfileStrengthPress = () => {
+    const nextStep = resolveFirstIncompleteOnboardingStep(profile);
+    router.push(nextStep ?? '/intern/profile');
   };
 
   const greeting = greetingForHour(new Date().getHours());
   const firstName = profile?.firstName?.trim();
+  const strength = profile ? calculateProfileStrength(profile) : null;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>
-            {greeting}
-            {firstName ? `, ${firstName}` : ''}
-          </Text>
-          <Text style={styles.subtitle}>Internships picked for your profile.</Text>
-        </View>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {initialsFor(profile?.firstName ?? null, profile?.lastName ?? null, user?.email)}
-          </Text>
-        </View>
-      </View>
-
       {internships === null && !error && (
         <View style={styles.centerContent}>
           <ActivityIndicator color={PathoraColors.teal600} />
@@ -220,52 +141,88 @@ function InternHomeScreen() {
         </View>
       )}
 
-      {internships !== null && !error && internships.length === 0 && (
+      {internships !== null && !error && (
         <ScrollView
-          contentContainerStyle={styles.emptyContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          <Text style={styles.emptyTitle}>No open internships yet</Text>
-          <Text style={styles.emptyBody}>
-            New opportunities will appear here when companies post them.
-          </Text>
-        </ScrollView>
-      )}
-
-      {internships !== null && !error && internships.length > 0 && (
-        <ScrollView
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          <Text style={styles.sectionTitle}>Recommended for you</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>
+                {greeting}
+                {firstName ? `, ${firstName}` : ''}
+              </Text>
+              <Text style={styles.subtitle}>Let&apos;s find your next opportunity.</Text>
+            </View>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initialsFor(profile?.firstName ?? null, profile?.lastName ?? null, user?.email)}</Text>
+            </View>
+          </View>
 
-          {internships.map((internship) => (
-            <InternshipFeedCard
-              key={internship.id}
-              item={internship}
-              onPress={() =>
-                router.push({ pathname: '/intern/internships/[id]', params: { id: internship.id } })
-              }
+          <PathoraSearchBar
+            placeholder="Search internships"
+            onPress={handleSearchPress}
+            style={styles.searchBar}
+          />
+
+          {strength && (
+            <ProfileStrengthCard
+              percentage={strength.percentage}
+              isOnboardingComplete={strength.isOnboardingComplete}
+              onActionPress={handleProfileStrengthPress}
             />
-          ))}
+          )}
+
+          <View style={styles.statsRow}>
+            <StatCard
+              label="Applications"
+              value={applicationsCount}
+              active
+              onPress={() => router.push('/intern/applications')}
+            />
+            {/* Saved internships have no backend yet — shown muted/non-interactive so the
+                layout matches the design without claiming the feature exists. */}
+            <StatCard label="Saved" value={0} active={false} />
+            {/* No INTERVIEW application status exists yet — always 0, never derived from
+                ACCEPTED. */}
+            <StatCard label="Interviews" value={0} active={false} />
+          </View>
+
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Recommended for you</Text>
+            {internships.length > 0 && (
+              <Pressable onPress={handleSeeAllPress} accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {internships.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No open internships yet</Text>
+              <Text style={styles.emptyBody}>
+                New opportunities will appear here when companies post them.
+              </Text>
+            </View>
+          ) : (
+            internships.slice(0, RECOMMENDED_PREVIEW_COUNT).map((internship) => (
+              <InternshipFeedCard
+                key={internship.id}
+                item={internship}
+                onPress={() =>
+                  router.push({ pathname: '/intern/internships/[id]', params: { id: internship.id } })
+                }
+              />
+            ))
+          )}
         </ScrollView>
       )}
-
-      <PathoraButton
-        label="Log out"
-        variant="secondary"
-        onPress={handleSignOut}
-        style={styles.signOutButton}
-      />
     </SafeAreaView>
   );
 }
 
 export default function InternHomeRoute() {
-  return (
-    <InternHomeGuard>
-      <InternHomeScreen />
-    </InternHomeGuard>
-  );
+  return <InternHomeScreen />;
 }
 
 const styles = StyleSheet.create({
@@ -273,18 +230,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PathoraColors.paper,
   },
-  guardFallback: {
-    flex: 1,
-    backgroundColor: PathoraColors.paper,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: PathoraSpacing[24],
+    paddingTop: 8,
+    paddingBottom: PathoraSpacing[32],
+    gap: PathoraSpacing[20],
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: PathoraSpacing[12],
-    paddingHorizontal: PathoraSpacing[24],
-    paddingTop: 8,
-    paddingBottom: PathoraSpacing[8],
   },
   headerText: {
     flex: 1,
@@ -313,6 +270,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: PathoraColors.teal700,
   },
+  searchBar: {
+    marginTop: -4,
+  },
   centerContent: {
     flex: 1,
     alignItems: 'center',
@@ -329,129 +289,76 @@ const styles = StyleSheet.create({
   retryButton: {
     minWidth: 140,
   },
-  emptyContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: PathoraSpacing[24],
-    gap: PathoraSpacing[8],
+  statsRow: {
+    flexDirection: 'row',
+    gap: PathoraSpacing[12],
   },
-  emptyTitle: {
-    fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 18,
-    color: PathoraColors.ink900,
-  },
-  emptyBody: {
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: PathoraColors.textSecondary,
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 16,
-    color: PathoraColors.ink900,
-    paddingHorizontal: PathoraSpacing[24],
-    marginBottom: PathoraSpacing[16],
-  },
-  listContent: {
-    paddingBottom: PathoraSpacing[16],
-  },
-  card: {
+  statCard: {
+    flex: 1,
     borderRadius: PathoraRadius[14],
     backgroundColor: PathoraColors.surface,
     borderWidth: 1,
     borderColor: PathoraColors.border,
     paddingVertical: PathoraSpacing[16],
-    paddingHorizontal: PathoraSpacing[16],
-    marginHorizontal: PathoraSpacing[24],
-    marginBottom: PathoraSpacing[12],
+    alignItems: 'center',
+    gap: 4,
   },
-  cardPressed: {
+  statCardPressed: {
     opacity: 0.7,
   },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: PathoraSpacing[12],
-    marginBottom: PathoraSpacing[12],
-  },
-  companyBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: PathoraRadius[12],
-    backgroundColor: PathoraColors.teal700,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  companyBadgeText: {
+  statValue: {
     fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 13,
-    color: PathoraColors.surface,
-  },
-  cardHeaderText: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontFamily: PathoraFonts.en.bold,
-    fontSize: 15.5,
+    fontSize: 20,
     color: PathoraColors.ink900,
   },
-  cardCompany: {
+  statValueMuted: {
+    color: PathoraColors.textTertiary,
+  },
+  statLabel: {
     fontFamily: PathoraFonts.en.medium,
-    fontSize: 13,
-    color: PathoraColors.textSecondary,
-    marginTop: 2,
-  },
-  cardMeta: {
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 13,
-    color: PathoraColors.textSecondary,
-    marginBottom: PathoraSpacing[12],
-  },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: PathoraSpacing[12],
-  },
-  skillChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: PathoraRadius[999],
-    backgroundColor: PathoraColors.teal100,
-  },
-  skillChipText: {
-    fontFamily: PathoraFonts.en.semiBold,
     fontSize: 12,
-    color: PathoraColors.teal700,
+    color: PathoraColors.textSecondary,
   },
-  cardBottomRow: {
+  statLabelMuted: {
+    color: PathoraColors.textTertiary,
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: PathoraSpacing[12],
+    marginTop: PathoraSpacing[8],
   },
-  cardDeadline: {
-    fontFamily: PathoraFonts.en.medium,
-    fontSize: 12.5,
-    color: PathoraColors.textTertiary,
-    flexShrink: 1,
-  },
-  matchPill: {
-    borderRadius: PathoraRadius[999],
-    backgroundColor: PathoraColors.amber100,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  matchPillText: {
+  sectionTitle: {
     fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 12.5,
-    color: PathoraColors.amberTextOnTint,
+    fontSize: 16,
+    color: PathoraColors.ink900,
   },
-  signOutButton: {
-    marginHorizontal: PathoraSpacing[24],
-    marginBottom: PathoraSpacing[16],
+  seeAllText: {
+    fontFamily: PathoraFonts.en.bold,
+    fontSize: 13,
+    color: PathoraColors.teal600,
+  },
+  emptyState: {
+    borderRadius: PathoraRadius[14],
+    backgroundColor: PathoraColors.surface,
+    borderWidth: 1,
+    borderColor: PathoraColors.border,
+    paddingVertical: PathoraSpacing[24],
+    paddingHorizontal: PathoraSpacing[20],
+    alignItems: 'center',
+    gap: 6,
+  },
+  emptyTitle: {
+    fontFamily: PathoraFonts.en.extraBold,
+    fontSize: 16,
+    color: PathoraColors.ink900,
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontFamily: PathoraFonts.en.regular,
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: PathoraColors.textSecondary,
+    textAlign: 'center',
   },
 });

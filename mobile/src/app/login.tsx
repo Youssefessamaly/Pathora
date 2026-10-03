@@ -8,11 +8,11 @@ import { PathoraButton } from '@/components/pathora-button';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { ApiError, getCompanyProfileOrNull, getInternProfileOrNull, NetworkError } from '@/lib/api';
+import { ApiError, getCompanyProfileOrNull, NetworkError } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth-token';
 import {
   resolveFirstIncompleteCompanyOnboardingStep,
-  resolveFirstIncompleteOnboardingStep,
+  resolveInternPostAuthRoute,
 } from '@/lib/onboarding';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -50,9 +50,7 @@ export default function LoginScreen() {
           if (!token) {
             throw new Error('Missing access token after sign-in');
           }
-          const profile = await getInternProfileOrNull(token);
-          const nextOnboardingRoute = resolveFirstIncompleteOnboardingStep(profile);
-          router.replace(nextOnboardingRoute ?? '/intern');
+          router.replace(await resolveInternPostAuthRoute(token));
         } catch {
           // Signed in, but couldn't determine onboarding status (e.g. network hiccup) —
           // don't guess where to send them. Stay on login rather than risk skipping
