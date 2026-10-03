@@ -24,4 +24,16 @@ public interface InternshipApplicationRepository extends JpaRepository<Internshi
      * non-owner.
      */
     Optional<InternshipApplication> findByIdAndInternProfileId(UUID id, UUID internProfileId);
+
+    /** Company-facing applicant list for one internship, newest first — mirrors the intern's
+     *  own appliedAt-desc ordering above. */
+    List<InternshipApplication> findAllByInternshipIdOrderByAppliedAtDesc(UUID internshipId);
+
+    /**
+     * Ownership-scoped lookup for the company side: resolving by id AND the owning internship
+     * together means an application belonging to a different internship (another company's, or
+     * even the same company's other internship) simply doesn't match, collapsing to 404 — same
+     * pattern as findByIdAndInternProfileId above.
+     */
+    Optional<InternshipApplication> findByIdAndInternshipId(UUID id, UUID internshipId);
 }
