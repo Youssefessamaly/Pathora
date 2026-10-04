@@ -3,7 +3,7 @@
  * Never log request bodies here — they may contain passwords.
  */
 
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -645,6 +645,161 @@ export function deleteCompanyApplicationQuestion(
   questionId: string,
 ): Promise<void> {
   return apiDelete<void>(`/company/internships/${internshipId}/application-questions/${questionId}`, { token });
+}
+
+/**
+ * The single backend ApplicationStatus enum, as seen from the company side — identical values
+ * to InternApplicationStatus (there is only one status model; see PART 10 of the applicant
+ * management milestone), named separately so company-side call sites don't borrow an
+ * intern-named type.
+ */
+export type CompanyApplicationStatus = 'APPLIED' | 'ACCEPTED' | 'REJECTED';
+
+/**
+ * The company's view of one applicant for one of its own internships. Mirrors the backend's
+ * CompanyApplicationListItemResponse field-for-field — deliberately lighter than
+ * CompanyApplicationDetail (no CV, cover letter, or answers; see getCompanyInternshipApplications).
+ */
+export type CompanyApplicationListItem = {
+  applicationId: string;
+  internshipId: string;
+  applicantName: string | null;
+  status: CompanyApplicationStatus;
+  appliedAt: string;
+  institutionName: string | null;
+  academicLevel: AcademicLevel | null;
+  academicYear: number | null;
+  major: string | null;
+};
+
+/** Mirrors the backend's CompanyApplicationDetailResponse.Applicant nested record. Deliberately
+ *  excludes date of birth and phone number — the backend never sends them to this endpoint. */
+export type CompanyApplicationApplicant = {
+  internProfileId: string;
+  firstName: string | null;
+  lastName: string | null;
+  institutionName: string | null;
+  academicLevel: AcademicLevel | null;
+  academicYear: number | null;
+  major: string | null;
+  expectedGraduationYear: number | null;
+  skills: InternProfileSkill[];
+  /** Pathora catalog skills the backend detected in the applicant's CV — distinct from the
+   *  applicant's manually selected `skills`, shown separately in the UI. */
+  cvDetectedSkills: InternProfileSkill[];
+};
+
+/** Mirrors the backend's CompanyApplicationDetailResponse.CvSnapshot nested record — metadata
+ *  only. The backend deliberately never sends a storageKey; use downloadCompanyApplicationCv
+ *  to fetch the actual bytes through the authenticated endpoint. */
+export type CompanyApplicationCvSnapshot = {
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+};
+
+export type CompanyApplicationAnswer = {
+  questionId: string;
+  questionText: string;
+  questionType: ApplicationQuestionType;
+  required: boolean;
+  displayOrder: number;
+  answer: string;
+};
+
+/**
+ * The company's full view of a single application, including the immutable question/answer
+ * snapshots as submitted — never the internship's current live questions (see
+ * getCompanyApplicationDetail). Mirrors the backend's CompanyApplicationDetailResponse.
+ */
+export type CompanyApplicationDetail = {
+  applicationId: string;
+  internshipId: string;
+  internshipTitle: string | null;
+  status: CompanyApplicationStatus;
+  appliedAt: string;
+  updatedAt: string;
+  /** Null only if the underlying intern profile can no longer be resolved. */
+  applicant: CompanyApplicationApplicant | null;
+  coverLetter: string | null;
+  linkedinUrl: string | null;
+  portfolioUrl: string | null;
+  cv: CompanyApplicationCvSnapshot;
+  answers: CompanyApplicationAnswer[];
+};
+
+/** Newest application first — same ordering rule as the backend's own default, never re-sort client-side. */
+export function getCompanyInternshipApplications(
+  token: string,
+  internshipId: string,
+): Promise<CompanyApplicationListItem[]> {
+  return apiGet<CompanyApplicationListItem[]>(`/company/internships/${internshipId}/applications`, { token });
+}
+
+/** Full detail — including applicant info, CV snapshot metadata, and answer snapshots — for
+ *  one application to one of the company's own internships. 404s if the internship or
+ *  application doesn't belong to the authenticated company. */
+export function getCompanyApplicationDetail(
+  token: string,
+  internshipId: string,
+  applicationId: string,
+): Promise<CompanyApplicationDetail> {
+  return apiGet<CompanyApplicationDetail>(
+    `/company/internships/${internshipId}/applications/${applicationId}`,
+    { token },
+  );
+}
+
+/** The only two decisions a company may submit — the backend separately rejects APPLIED and
+ *  any other value with a 400. */
+export type CompanyApplicationDecision = 'ACCEPTED' | 'REJECTED';
+
+/**
+ * Applies the company's accept/reject decision. Throws ApiError with status 409 if the
+ * application has already been decided (APPLIED -> ACCEPTED/REJECTED is one-way) — callers
+ * should check `error.status === 409` and refresh the application detail to show the real
+ * current status rather than assuming their own requested status was ignored.
+ */
+export function updateCompanyApplicationStatus(
+  token: string,
+  internshipId: string,
+  applicationId: string,
+  status: CompanyApplicationDecision,
+): Promise<CompanyApplicationDetail> {
+  return apiPatch<CompanyApplicationDetail>(
+    `/company/internships/${internshipId}/applications/${applicationId}/status`,
+    { status },
+    { token },
+  );
+}
+
+/**
+ * Downloads the APPLICATION's own immutable CV snapshot (never the intern's current profile
+ * CV — the backend endpoint itself enforces that distinction) to a local cache file, using
+ * expo-file-system's authenticated download (same File-based networking primitive already
+ * used by uploadInternCv) so the bearer token never leaves this module as a bare query param
+ * or public URL. The backend never exposes a storageKey — this only ever talks to the
+ * dedicated CV endpoint. Returns the downloaded File; callers can read its `.uri` to open or
+ * share it (see the applicant detail screen's "View CV" action).
+ */
+export async function downloadCompanyApplicationCv(
+  token: string,
+  internshipId: string,
+  applicationId: string,
+  fileName: string,
+): Promise<File> {
+  const url = `${getBaseUrl()}/company/internships/${internshipId}/applications/${applicationId}/cv`;
+  const destination = new File(Paths.cache, `application-cv-${applicationId}-${fileName}`);
+
+  try {
+    return await File.downloadFileAsync(url, destination, {
+      headers: { Authorization: `Bearer ${token}` },
+      idempotent: true,
+    });
+  } catch {
+    throw new NetworkError('Unable to download this CV. Please try again.');
+  }
 }
 
 /**

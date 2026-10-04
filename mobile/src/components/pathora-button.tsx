@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, type GestureResponderEvent, type StyleProp
 
 import { PathoraColors, PathoraFonts, PathoraRadius } from '@/constants/pathora-theme';
 
-export type PathoraButtonVariant = 'primary' | 'secondary';
+export type PathoraButtonVariant = 'primary' | 'secondary' | 'success' | 'destructive';
 
 export type PathoraButtonProps = {
   label: string;
@@ -12,6 +12,20 @@ export type PathoraButtonProps = {
   disabled?: boolean;
 };
 
+const FILLED_VARIANTS: Record<PathoraButtonVariant, boolean> = {
+  primary: true,
+  secondary: false,
+  success: true,
+  destructive: true,
+};
+
+const VARIANT_STYLES: Record<PathoraButtonVariant, ViewStyle> = {
+  primary: { backgroundColor: PathoraColors.teal600 },
+  secondary: { backgroundColor: 'transparent', borderWidth: 1, borderColor: PathoraColors.borderStrong },
+  success: { backgroundColor: PathoraColors.success },
+  destructive: { backgroundColor: PathoraColors.error },
+};
+
 export function PathoraButton({
   label,
   onPress,
@@ -19,7 +33,7 @@ export function PathoraButton({
   style,
   disabled = false,
 }: PathoraButtonProps) {
-  const isPrimary = variant === 'primary';
+  const isFilled = FILLED_VARIANTS[variant];
 
   return (
     <Pressable
@@ -28,14 +42,12 @@ export function PathoraButton({
       accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.base,
-        isPrimary ? styles.primary : styles.secondary,
+        VARIANT_STYLES[variant],
         pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}>
-      <Text style={[styles.label, isPrimary ? styles.labelPrimary : styles.labelSecondary]}>
-        {label}
-      </Text>
+      <Text style={[styles.label, isFilled ? styles.labelFilled : styles.labelSecondary]}>{label}</Text>
     </Pressable>
   );
 }
@@ -48,14 +60,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
-  primary: {
-    backgroundColor: PathoraColors.teal600,
-  },
-  secondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: PathoraColors.borderStrong,
-  },
   pressed: {
     opacity: 0.85,
   },
@@ -66,7 +70,7 @@ const styles = StyleSheet.create({
     fontFamily: PathoraFonts.en.bold,
     fontSize: 14.5,
   },
-  labelPrimary: {
+  labelFilled: {
     color: PathoraColors.surface,
   },
   labelSecondary: {

@@ -181,6 +181,20 @@ function InternshipDetailsScreen() {
 
         {internship.applicationMethod === 'INTERNAL' && (
           <PathoraButton
+            label="Applicants"
+            variant="secondary"
+            onPress={() =>
+              router.push({
+                pathname: '/company/internships/[id]/applicants',
+                params: { id: internship.id },
+              })
+            }
+            style={styles.actionButton}
+          />
+        )}
+
+        {internship.applicationMethod === 'INTERNAL' && (
+          <PathoraButton
             label="Manage application questions"
             variant="secondary"
             onPress={() =>
