@@ -1,4 +1,12 @@
-import { ApiError, getInternProfileOrNull, NetworkError, type CompanyProfile, type InternProfile } from '@/lib/api';
+import {
+  ApiError,
+  getCompanyApprovalStatus,
+  getCompanyProfileOrNull,
+  getInternProfileOrNull,
+  NetworkError,
+  type CompanyProfile,
+  type InternProfile,
+} from '@/lib/api';
 
 export type OnboardingRoute = '/onboarding/personal' | '/onboarding/education' | '/onboarding/skills';
 
@@ -6,6 +14,15 @@ export type CompanyOnboardingRoute =
   | '/company/onboarding/company'
   | '/company/onboarding/details'
   | '/company/onboarding/contact';
+
+/** Where an authenticated COMPANY lands — resolved fresh every time (login, right after
+ *  finishing onboarding, and as a defense-in-depth check on the dashboard itself) rather than
+ *  cached, since approval status can change between visits. */
+export type CompanyPostAuthRoute =
+  | CompanyOnboardingRoute
+  | '/company/approval-pending'
+  | '/company/approval-rejected'
+  | '/company';
 
 function isStep1Incomplete(profile: InternProfile): boolean {
   return !profile.firstName || !profile.lastName || !profile.dateOfBirth || !profile.phoneNumber;
@@ -117,6 +134,38 @@ export function resolveFirstIncompleteCompanyOnboardingStep(
   // All individual step checks passed but the backend hasn't marked onboarding
   // complete yet (e.g. the user never pressed Finish) — land on the last step.
   return '/company/onboarding/contact';
+}
+
+/**
+ * Resolves where an authenticated COMPANY should land — the single source of truth used by
+ * login, by the screen right after onboarding finishes, and by the dashboard's own
+ * defense-in-depth guard (see /company/index.tsx), so all three can never disagree.
+ *
+ * Order matters: onboarding completeness is checked first and entirely independently of
+ * approval status — a PENDING company must always be able to finish onboarding, never get
+ * diverted to the approval screens first. Only once onboarding is complete does approval
+ * status decide the destination. Throws if either fetch fails (network, 401, ...) — callers
+ * should not guess a destination on failure, matching resolveInternPostAuthRoute's contract.
+ */
+export async function resolveCompanyPostAuthRoute(token: string): Promise<CompanyPostAuthRoute> {
+  const profile = await getCompanyProfileOrNull(token);
+  const nextOnboardingStep = resolveFirstIncompleteCompanyOnboardingStep(profile);
+
+  if (nextOnboardingStep) {
+    return nextOnboardingStep;
+  }
+
+  const approval = await getCompanyApprovalStatus(token);
+
+  if (approval.status === 'PENDING') {
+    return '/company/approval-pending';
+  }
+
+  if (approval.status === 'REJECTED') {
+    return '/company/approval-rejected';
+  }
+
+  return '/company';
 }
 
 export function describeOnboardingError(error: unknown): string {

@@ -11,7 +11,7 @@ import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
 import { completeCompanyOnboarding, getCompanyProfileOrNull, updateCompanyProfile } from '@/lib/api';
-import { describeOnboardingError, getOnboardingMissingFields } from '@/lib/onboarding';
+import { describeOnboardingError, getOnboardingMissingFields, resolveCompanyPostAuthRoute } from '@/lib/onboarding';
 
 const EGYPT_PHONE_PATTERN = /^(01[0125]\d{8}|\+201[0125]\d{8})$/;
 
@@ -72,7 +72,12 @@ function CompanyContactScreen() {
       // Onboarding is only marked complete once the backend confirms it — a failure here
       // (e.g. the backend still finds required fields missing) must not navigate away.
       await completeCompanyOnboarding(token);
-      router.replace('/company');
+
+      // Completing onboarding never lands directly on the dashboard anymore — a brand-new
+      // company is still PENDING at this point, so the shared resolver sends it to the
+      // approval-pending screen instead (and APPROVED/REJECTED are still handled correctly
+      // for the rarer case of a company revisiting this step after already being decided).
+      router.replace(await resolveCompanyPostAuthRoute(token));
     } catch (error) {
       const missingFields = getOnboardingMissingFields(error);
       setSubmitError(

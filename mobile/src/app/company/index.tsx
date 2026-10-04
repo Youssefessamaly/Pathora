@@ -15,19 +15,26 @@ import {
   type CompanyProfile,
 } from '@/lib/api';
 import { getAllCompanyApplications, type CompanyApplicantEntry } from '@/lib/company-applicants';
-import { describeOnboardingError } from '@/lib/onboarding';
+import { describeOnboardingError, resolveCompanyPostAuthRoute } from '@/lib/onboarding';
 import { initialsFor } from '@/lib/initials';
 
 const APPLICANT_PREVIEW_COUNT = 3;
 
 /**
- * Client-side gate for the company home: requires an authenticated COMPANY session.
- * The backend independently enforces this on every request regardless of this guard.
+ * Client-side gate for the company home: requires an authenticated COMPANY session AND a
+ * freshly-verified APPROVED status. The backend independently enforces both on every request
+ * regardless of this guard — this exists so a PENDING/REJECTED company (or one still mid
+ * onboarding) that lands on /company directly, or via a stale restored route, is bounced to
+ * the correct screen instead of seeing a dashboard whose data it can't actually use. Re-checked
+ * on every focus (not just first mount) via resolveCompanyPostAuthRoute — the same resolver
+ * login and the onboarding-completion screen use — so all entry points can never disagree.
  */
 function CompanyHomeGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, isInitializing, user } = useAuth();
+  const { isAuthenticated, isInitializing, user, token, signOut } = useAuth();
   const isCompany = user?.role === 'COMPANY';
+
+  const [checkState, setCheckState] = useState<'checking' | 'approved' | 'error'>('checking');
 
   useEffect(() => {
     if (isInitializing) {
@@ -44,8 +51,49 @@ function CompanyHomeGuard({ children }: { children: ReactNode }) {
     }
   }, [isInitializing, isAuthenticated, isCompany, user?.role, router]);
 
-  if (isInitializing || !isAuthenticated || !isCompany) {
+  const checkApproval = useCallback(() => {
+    if (!token) {
+      return;
+    }
+    setCheckState('checking');
+    resolveCompanyPostAuthRoute(token)
+      .then((route) => {
+        if (route === '/company') {
+          setCheckState('approved');
+        } else {
+          router.replace(route);
+        }
+      })
+      .catch(() => setCheckState('error'));
+  }, [token, router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isInitializing && isAuthenticated && isCompany) {
+        checkApproval();
+      }
+    }, [isInitializing, isAuthenticated, isCompany, checkApproval]),
+  );
+
+  const handleGuardSignOut = async () => {
+    await signOut();
+    router.replace('/login');
+  };
+
+  if (isInitializing || !isAuthenticated || !isCompany || checkState === 'checking') {
     return <View style={styles.guardFallback} />;
+  }
+
+  if (checkState === 'error') {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <View style={styles.centerContent}>
+          <Text style={styles.errorText}>Unable to verify your account status. Please try again.</Text>
+          <PathoraButton label="Try again" variant="secondary" onPress={checkApproval} style={styles.retryButton} />
+          <PathoraButton label="Log out" variant="secondary" onPress={handleGuardSignOut} style={styles.retryButton} />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return <>{children}</>;

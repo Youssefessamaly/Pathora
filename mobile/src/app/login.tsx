@@ -8,12 +8,9 @@ import { PathoraButton } from '@/components/pathora-button';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { ApiError, getCompanyProfileOrNull, NetworkError } from '@/lib/api';
+import { ApiError, NetworkError } from '@/lib/api';
 import { getAccessToken } from '@/lib/auth-token';
-import {
-  resolveFirstIncompleteCompanyOnboardingStep,
-  resolveInternPostAuthRoute,
-} from '@/lib/onboarding';
+import { resolveCompanyPostAuthRoute, resolveInternPostAuthRoute } from '@/lib/onboarding';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -66,13 +63,11 @@ export default function LoginScreen() {
           if (!token) {
             throw new Error('Missing access token after sign-in');
           }
-          const profile = await getCompanyProfileOrNull(token);
-          const nextOnboardingRoute = resolveFirstIncompleteCompanyOnboardingStep(profile);
-          router.replace(nextOnboardingRoute ?? '/company');
+          router.replace(await resolveCompanyPostAuthRoute(token));
         } catch {
-          // Signed in, but couldn't determine onboarding status (e.g. network hiccup) —
-          // don't guess where to send them. Stay on login rather than risk skipping
-          // onboarding.
+          // Signed in, but couldn't determine onboarding/approval status (e.g. network
+          // hiccup) — don't guess where to send them. Stay on login rather than risk
+          // skipping onboarding or showing the wrong approval screen.
           setSubmitError('Unable to load your company profile. Please try again.');
         }
         return;

@@ -464,6 +464,23 @@ export function completeCompanyOnboarding(token: string): Promise<CompanyProfile
   return apiPost<CompanyProfile>('/company/profile/complete', undefined, { token });
 }
 
+export type CompanyApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** Mirrors the backend's CompanyApprovalStatusResponse exactly. Deliberately minimal — no
+ *  rejection reason or reviewer identity is returned by the backend, so none is shown here. */
+export type CompanyApprovalStatusResponse = {
+  status: CompanyApprovalStatus;
+  reviewedAt: string | null;
+};
+
+/** PENDING and REJECTED companies can still authenticate (see AuthService.login) — this
+ *  endpoint is how the app tells them apart from APPROVED once signed in. Never implies
+ *  marketplace access on its own; the backend's CompanyApprovalGuard is what actually enforces
+ *  that on every marketplace request regardless of what this returns. */
+export function getCompanyApprovalStatus(token: string): Promise<CompanyApprovalStatusResponse> {
+  return apiGet<CompanyApprovalStatusResponse>('/company/approval-status', { token });
+}
+
 export type InternshipWorkMode = 'ONSITE' | 'HYBRID' | 'REMOTE';
 export type InternshipStatus = 'OPEN' | 'CLOSED';
 
