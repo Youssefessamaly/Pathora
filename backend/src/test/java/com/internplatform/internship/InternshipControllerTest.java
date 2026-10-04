@@ -1,5 +1,6 @@
 package com.internplatform.internship;
 
+import com.internplatform.companyprofile.ApprovalStatus;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.Skill;
@@ -99,6 +100,9 @@ class InternshipControllerTest {
         profile.setContactName("Sara Ahmed");
         profile.setContactPhone("+201012345678");
         profile.markOnboardingCompleted(OffsetDateTime.now(ZoneOffset.UTC));
+        // This fixture represents an already-working, previously-trusted company (the pre-V15
+        // state every existing account was backfilled to) — not a brand-new PENDING signup.
+        profile.recordApprovalDecision(ApprovalStatus.APPROVED, OffsetDateTime.now(ZoneOffset.UTC));
         return companyProfileRepository.saveAndFlush(profile);
     }
 

@@ -50,3 +50,9 @@ app:
     expiration-seconds: 3600
   cv-storage:
     directory: ${CV_STORAGE_DIR:./data/cv-storage}
+  admin:
+    # Optional one-time ADMIN account provisioning — see AdminAccountBootstrapper. Left unset
+    # by default (empty = no-op); set both to provision the first internal admin account, then
+    # they may be safely left in place (an existing admin is never recreated/reset).
+    bootstrap-email: ${PATHORA_ADMIN_EMAIL:}
+    bootstrap-password: ${PATHORA_ADMIN_PASSWORD:}

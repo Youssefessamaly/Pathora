@@ -1,5 +1,6 @@
 package com.internplatform.internship;
 
+import com.internplatform.companyprofile.CompanyApprovalGuard;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.Skill;
@@ -36,15 +37,18 @@ public class InternshipService {
     private final InternshipRepository internshipRepository;
     private final CompanyProfileRepository companyProfileRepository;
     private final SkillRepository skillRepository;
+    private final CompanyApprovalGuard companyApprovalGuard;
 
     public InternshipService(
             InternshipRepository internshipRepository,
             CompanyProfileRepository companyProfileRepository,
-            SkillRepository skillRepository
+            SkillRepository skillRepository,
+            CompanyApprovalGuard companyApprovalGuard
     ) {
         this.internshipRepository = internshipRepository;
         this.companyProfileRepository = companyProfileRepository;
         this.skillRepository = skillRepository;
+        this.companyApprovalGuard = companyApprovalGuard;
     }
 
     @Transactional
@@ -97,6 +101,7 @@ public class InternshipService {
     public InternshipResponse updateInternship(UUID userId, UUID internshipId, InternshipUpdateRequest request) {
         CompanyProfile profile = findCompanyProfileOrInternshipNotFound(userId);
         Internship internship = findOwnedInternshipOrThrow(internshipId, profile);
+        companyApprovalGuard.requireApproved(profile);
 
         if (request.title() != null) {
             internship.setTitle(request.title());
@@ -151,6 +156,7 @@ public class InternshipService {
     public InternshipResponse closeInternship(UUID userId, UUID internshipId) {
         CompanyProfile profile = findCompanyProfileOrInternshipNotFound(userId);
         Internship internship = findOwnedInternshipOrThrow(internshipId, profile);
+        companyApprovalGuard.requireApproved(profile);
 
         if (internship.getStatus() != InternshipStatus.CLOSED) {
             internship.setStatus(InternshipStatus.CLOSED);
@@ -169,6 +175,8 @@ public class InternshipService {
                     "Company profile must be completed before creating an internship"
             );
         }
+
+        companyApprovalGuard.requireApproved(profile);
 
         return profile;
     }

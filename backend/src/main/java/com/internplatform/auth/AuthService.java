@@ -1,5 +1,7 @@
 package com.internplatform.auth;
 
+import com.internplatform.companyprofile.CompanyProfile;
+import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.security.JwtService;
 import com.internplatform.user.Role;
 import com.internplatform.user.User;
@@ -8,6 +10,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Locale;
@@ -16,15 +19,18 @@ import java.util.Locale;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final CompanyProfileRepository companyProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public AuthService(
             UserRepository userRepository,
+            CompanyProfileRepository companyProfileRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService
     ) {
         this.userRepository = userRepository;
+        this.companyProfileRepository = companyProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -33,8 +39,20 @@ public class AuthService {
         return register(request, Role.INTERN);
     }
 
+    /**
+     * A COMPANY registration also creates its CompanyProfile row immediately (PENDING by the
+     * entity's own default — see CompanyProfile) rather than waiting for onboarding to start
+     * it, as CompanyProfileService.upsertProfile otherwise would. This closes the only window
+     * where a company could exist without an approval record: the approval status must be
+     * checkable (and the company blocked from marketplace features) from the moment the
+     * account exists, not only once it gets around to onboarding. Wrapped in one transaction
+     * so a company user is never persisted without its profile, or vice versa.
+     */
+    @Transactional
     public RegisterResponse registerCompany(RegisterRequest request) {
-        return register(request, Role.COMPANY);
+        RegisterResponse response = register(request, Role.COMPANY);
+        companyProfileRepository.save(new CompanyProfile(response.id()));
+        return response;
     }
 
     public LoginResponse login(LoginRequest request) {

@@ -1,5 +1,6 @@
 package com.internplatform.internshipapplication;
 
+import com.internplatform.companyprofile.CompanyApprovalGuard;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.CvStorageService;
@@ -37,6 +38,7 @@ public class CompanyApplicationService {
     private final CompanyProfileRepository companyProfileRepository;
     private final InternProfileRepository internProfileRepository;
     private final CvStorageService cvStorageService;
+    private final CompanyApprovalGuard companyApprovalGuard;
 
     public CompanyApplicationService(
             InternshipApplicationRepository applicationRepository,
@@ -44,7 +46,8 @@ public class CompanyApplicationService {
             InternshipRepository internshipRepository,
             CompanyProfileRepository companyProfileRepository,
             InternProfileRepository internProfileRepository,
-            CvStorageService cvStorageService
+            CvStorageService cvStorageService,
+            CompanyApprovalGuard companyApprovalGuard
     ) {
         this.applicationRepository = applicationRepository;
         this.answerRepository = answerRepository;
@@ -52,6 +55,7 @@ public class CompanyApplicationService {
         this.companyProfileRepository = companyProfileRepository;
         this.internProfileRepository = internProfileRepository;
         this.cvStorageService = cvStorageService;
+        this.companyApprovalGuard = companyApprovalGuard;
     }
 
     @Transactional(readOnly = true)
@@ -114,8 +118,10 @@ public class CompanyApplicationService {
      * doesn't exist — avoids leaking whether the internship id belongs to another company.
      */
     private CompanyProfile findCompanyProfileOrNotFound(UUID userId) {
-        return companyProfileRepository.findByUserId(userId)
+        CompanyProfile profile = companyProfileRepository.findByUserId(userId)
                 .orElseThrow(this::internshipNotFound);
+        companyApprovalGuard.requireApproved(profile);
+        return profile;
     }
 
     private Internship findOwnedInternshipOrThrow(UUID internshipId, CompanyProfile profile) {

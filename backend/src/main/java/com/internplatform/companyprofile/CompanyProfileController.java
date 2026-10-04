@@ -31,6 +31,13 @@ public class CompanyProfileController {
         return companyProfileService.getProfile(currentUserId(jwt));
     }
 
+    @GetMapping("/approval-status")
+    public CompanyApprovalStatusResponse getApprovalStatus(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return companyProfileService.getApprovalStatus(currentUserId(jwt));
+    }
+
     @PatchMapping("/profile")
     public CompanyProfileResponse updateProfile(
             @AuthenticationPrincipal Jwt jwt,

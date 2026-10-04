@@ -1,5 +1,6 @@
 package com.internplatform.internship;
 
+import com.internplatform.companyprofile.ApprovalStatus;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.AcademicLevel;
@@ -95,6 +96,9 @@ class InternInternshipFeedControllerTest {
         profile.setContactName("Sara Ahmed");
         profile.setContactPhone("+201012345678");
         profile.markOnboardingCompleted(OffsetDateTime.now(ZoneOffset.UTC));
+        // This fixture represents an already-working, previously-trusted company (the pre-V15
+        // state every existing account was backfilled to) — not a brand-new PENDING signup.
+        profile.recordApprovalDecision(ApprovalStatus.APPROVED, OffsetDateTime.now(ZoneOffset.UTC));
         return companyProfileRepository.saveAndFlush(profile);
     }
 
@@ -213,7 +217,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void internCanAccessPersonalizedFeed() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
-        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -252,7 +256,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void closedInternshipsExcluded() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.CLOSED);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.CLOSED);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -263,7 +267,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void expiredInternshipsExcluded() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().minusDays(1), InternshipStatus.OPEN);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).minusDays(1), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -274,8 +278,8 @@ class InternInternshipFeedControllerTest {
     @Test
     void openFutureDeadlineIncluded() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(1), InternshipStatus.OPEN);
-        createInternship(List.of("Java"), Set.of(), LocalDate.now(), InternshipStatus.OPEN);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(1), InternshipStatus.OPEN);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -286,7 +290,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void allSkillsAndMajorMatchGivesFullScore() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
-        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -298,7 +302,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void noSkillsButMajorMatchGivesThirty() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of());
-        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -310,7 +314,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void allSkillsButNoMajorMatchGivesSeventy() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
-        createInternship(List.of("Java", "SQL"), Set.of("Business Administration"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java", "SQL"), Set.of("Business Administration"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -325,7 +329,7 @@ class InternInternshipFeedControllerTest {
         createInternship(
                 List.of("Java", "SQL", "Spring Boot", "Communication"),
                 Set.of("Business Administration"),
-                LocalDate.now().plusDays(30),
+                LocalDate.now(ZoneOffset.UTC).plusDays(30),
                 InternshipStatus.OPEN
         );
 
@@ -340,7 +344,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void noMatchGivesZero() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Figma"));
-        createInternship(List.of("Java", "SQL"), Set.of("Business Administration"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java", "SQL"), Set.of("Business Administration"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -351,7 +355,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void internshipWithNoTargetMajorsHandlesSafely() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -364,8 +368,8 @@ class InternInternshipFeedControllerTest {
     @Test
     void higherRelevanceAppearsFirst() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
-        Internship lowMatch = createInternship(List.of("Java", "SQL", "Python", "Figma"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
-        Internship highMatch = createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        Internship lowMatch = createInternship(List.of("Java", "SQL", "Python", "Figma"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
+        Internship highMatch = createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -380,10 +384,10 @@ class InternInternshipFeedControllerTest {
 
         // 1/2 matched, major matches: skillScore=35 + majorScore=30 = 65, matchedSkillCount=1
         Internship fewerMatches = createInternship(
-                List.of("Java", "Python"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java", "Python"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
         // 2/4 matched, major matches: skillScore=35 + majorScore=30 = 65, matchedSkillCount=2
         Internship moreMatches = createInternship(
-                List.of("Java", "SQL", "Python", "Figma"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java", "SQL", "Python", "Figma"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -398,9 +402,9 @@ class InternInternshipFeedControllerTest {
     void remainingTieUsesNewestCreatedAtFirst() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
 
-        Internship older = createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        Internship older = createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
         Thread.sleep(20);
-        Internship newer = createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        Internship newer = createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -413,7 +417,7 @@ class InternInternshipFeedControllerTest {
     void internDetailReturnsPersonalizedRelevanceFields() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
         Internship internship = createInternship(
-                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isOk())
@@ -429,7 +433,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void closedInternshipDetailReturns404() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        Internship internship = createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.CLOSED);
+        Internship internship = createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.CLOSED);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isNotFound());
@@ -439,7 +443,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void expiredInternshipDetailReturns404() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        Internship internship = createInternship(List.of("Java"), Set.of(), LocalDate.now().minusDays(1), InternshipStatus.OPEN);
+        Internship internship = createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).minusDays(1), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isNotFound());
@@ -449,7 +453,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void unrestrictedInternshipAppearsForUniversityIntern() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 2, "Computer Science");
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, null);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, null);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -460,7 +464,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void minimumYearFourAppearsForYearFourIntern() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 4, "Computer Science");
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 4);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -472,7 +476,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void minimumYearFourAppearsForYearFiveIntern() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 5, "Computer Science");
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 4);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -483,7 +487,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void minimumYearFourExcludedForYearThreeIntern() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 3, "Computer Science");
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 4);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -494,7 +498,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void minimumYearRestrictionExcludesHighSchoolIntern() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.HIGH_SCHOOL, null, "N/A");
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 1);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 1);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -506,7 +510,7 @@ class InternInternshipFeedControllerTest {
     void restrictedInternshipDetailUnavailableForIneligibleIntern() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 2, "Computer Science");
         Internship internship = createInternship(
-                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+                List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 4);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isNotFound());
@@ -517,7 +521,7 @@ class InternInternshipFeedControllerTest {
     void unrestrictedInternshipDetailStillWorks() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 1, "Computer Science");
         Internship internship = createInternship(
-                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN, null);
+                List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, null);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isOk())
@@ -529,7 +533,7 @@ class InternInternshipFeedControllerTest {
     void relevanceScoreUnchangedByAcademicYearRequirement() throws Exception {
         createInternProfileWithAcademicStanding(internUser, AcademicLevel.UNIVERSITY, (short) 4, "Computer Science");
         Internship restricted = createInternship(
-                List.of("Java"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+                List.of("Java"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 4);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + restricted.getId()).with(asIntern()))
                 .andExpect(status().isOk())
@@ -548,7 +552,7 @@ class InternInternshipFeedControllerTest {
         internProfileRepository.saveAndFlush(profile);
 
         Internship internship = createInternship(
-                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isOk())
@@ -566,7 +570,7 @@ class InternInternshipFeedControllerTest {
         internProfileRepository.saveAndFlush(profile);
 
         Internship internship = createInternship(
-                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships/" + internship.getId()).with(asIntern()))
                 .andExpect(status().isOk())
@@ -582,7 +586,7 @@ class InternInternshipFeedControllerTest {
         profile.setCvDetectedSkills(skillsByNames(List.of("Java")));
         internProfileRepository.saveAndFlush(profile);
 
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -599,7 +603,7 @@ class InternInternshipFeedControllerTest {
         internProfileRepository.saveAndFlush(profile);
 
         // Restricted to year 4+: a year-3 intern must still be excluded regardless of CV skills.
-        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN, 4);
+        createInternship(List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN, 4);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -617,7 +621,7 @@ class InternInternshipFeedControllerTest {
         internProfileRepository.saveAndFlush(otherProfile);
 
         Internship internship = createInternship(
-                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         // The authenticated intern (no CV skills of their own) must not see the other
         // intern's CV-detected "Java" reflected in their own match.
@@ -641,11 +645,11 @@ class InternInternshipFeedControllerTest {
 
         // 1/1 profile-only match -> 70% without CV skills.
         Internship profileOnlyMatch = createInternship(
-                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
         // 3/3 matched once CV skills are unioned in -> 70% as well, but with a higher
         // matchedSkillCount, so it must now rank first on the tiebreak.
         Internship cvBoostedMatch = createInternship(
-                List.of("Java", "SQL", "Python"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+                List.of("Java", "SQL", "Python"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -659,7 +663,7 @@ class InternInternshipFeedControllerTest {
     @Test
     void internFeedExposesInternalApplicationMethod() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
-        createInternship(List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN);
+        createInternship(List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN);
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
                 .andExpect(status().isOk())
@@ -672,7 +676,7 @@ class InternInternshipFeedControllerTest {
     void internFeedAndDetailExposeExternalApplicationMethodAndUrl() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java"));
         Internship internship = createExternalInternship(
-                List.of("Java"), Set.of(), LocalDate.now().plusDays(30), InternshipStatus.OPEN,
+                List.of("Java"), Set.of(), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN,
                 "https://careers.example.com/apply");
 
         mockMvc.perform(get("/api/v1/intern/internships").with(asIntern()))
@@ -691,7 +695,7 @@ class InternInternshipFeedControllerTest {
     void applicationMethodNeverAffectsRelevanceScoring() throws Exception {
         createCompletedInternProfile(internUser, "Computer Science", List.of("Java", "SQL"));
         Internship external = createExternalInternship(
-                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now().plusDays(30), InternshipStatus.OPEN,
+                List.of("Java", "SQL"), Set.of("Computer Science"), LocalDate.now(ZoneOffset.UTC).plusDays(30), InternshipStatus.OPEN,
                 "https://careers.example.com/apply");
 
         mockMvc.perform(get("/api/v1/intern/internships/" + external.getId()).with(asIntern()))

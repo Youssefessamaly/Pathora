@@ -1,5 +1,6 @@
 package com.internplatform.internshipapplication;
 
+import com.internplatform.companyprofile.CompanyApprovalGuard;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internship.ApplicationMethod;
@@ -26,17 +27,20 @@ public class InternshipApplicationQuestionService {
     private final InternshipRepository internshipRepository;
     private final CompanyProfileRepository companyProfileRepository;
     private final InternshipApplicationRepository applicationRepository;
+    private final CompanyApprovalGuard companyApprovalGuard;
 
     public InternshipApplicationQuestionService(
             InternshipApplicationQuestionRepository questionRepository,
             InternshipRepository internshipRepository,
             CompanyProfileRepository companyProfileRepository,
-            InternshipApplicationRepository applicationRepository
+            InternshipApplicationRepository applicationRepository,
+            CompanyApprovalGuard companyApprovalGuard
     ) {
         this.questionRepository = questionRepository;
         this.internshipRepository = internshipRepository;
         this.companyProfileRepository = companyProfileRepository;
         this.applicationRepository = applicationRepository;
+        this.companyApprovalGuard = companyApprovalGuard;
     }
 
     @Transactional
@@ -137,8 +141,10 @@ public class InternshipApplicationQuestionService {
     }
 
     private CompanyProfile findCompanyProfileOrInternshipNotFound(UUID userId) {
-        return companyProfileRepository.findByUserId(userId)
+        CompanyProfile profile = companyProfileRepository.findByUserId(userId)
                 .orElseThrow(this::internshipNotFound);
+        companyApprovalGuard.requireApproved(profile);
+        return profile;
     }
 
     private Internship findOwnedInternshipOrThrow(UUID internshipId, CompanyProfile profile) {

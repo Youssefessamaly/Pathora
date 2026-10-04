@@ -1,5 +1,6 @@
 package com.internplatform.internshipapplication;
 
+import com.internplatform.companyprofile.ApprovalStatus;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.AcademicLevel;
@@ -126,6 +127,9 @@ class InternshipApplicationControllerTest {
         profile.setContactName("Sara Ahmed");
         profile.setContactPhone("+201012345678");
         profile.markOnboardingCompleted(OffsetDateTime.now(ZoneOffset.UTC));
+        // This fixture represents an already-working, previously-trusted company (the pre-V15
+        // state every existing account was backfilled to) — not a brand-new PENDING signup.
+        profile.recordApprovalDecision(ApprovalStatus.APPROVED, OffsetDateTime.now(ZoneOffset.UTC));
         return companyProfileRepository.saveAndFlush(profile);
     }
 
@@ -202,7 +206,7 @@ class InternshipApplicationControllerTest {
     }
 
     private Internship createOpenInternalInternship() {
-        return createInternship(ApplicationMethod.INTERNAL, null, InternshipStatus.OPEN, LocalDate.now().plusDays(30), null);
+        return createInternship(ApplicationMethod.INTERNAL, null, InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC).plusDays(30), null);
     }
 
     private InternshipApplicationQuestion createQuestion(
@@ -371,7 +375,7 @@ class InternshipApplicationControllerTest {
         attachCv(profile, pdfBytes("resume-a"), "resume.pdf");
         Internship internship = createInternship(
                 ApplicationMethod.EXTERNAL, "https://careers.example.com/apply",
-                InternshipStatus.OPEN, LocalDate.now().plusDays(30), null);
+                InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC).plusDays(30), null);
 
         mockMvc.perform(post(applyUrl(internship.getId()))
                         .with(asIntern())
@@ -419,7 +423,7 @@ class InternshipApplicationControllerTest {
         InternProfile profile = createCompletedInternProfile(internUser);
         attachCv(profile, pdfBytes("resume-a"), "resume.pdf");
         Internship internship = createInternship(
-                ApplicationMethod.INTERNAL, null, InternshipStatus.CLOSED, LocalDate.now().plusDays(30), null);
+                ApplicationMethod.INTERNAL, null, InternshipStatus.CLOSED, LocalDate.now(ZoneOffset.UTC).plusDays(30), null);
 
         mockMvc.perform(post(applyUrl(internship.getId()))
                         .with(asIntern())
@@ -434,7 +438,7 @@ class InternshipApplicationControllerTest {
         InternProfile profile = createCompletedInternProfile(internUser);
         attachCv(profile, pdfBytes("resume-a"), "resume.pdf");
         Internship internship = createInternship(
-                ApplicationMethod.INTERNAL, null, InternshipStatus.OPEN, LocalDate.now().minusDays(1), null);
+                ApplicationMethod.INTERNAL, null, InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC).minusDays(1), null);
 
         mockMvc.perform(post(applyUrl(internship.getId()))
                         .with(asIntern())
@@ -449,7 +453,7 @@ class InternshipApplicationControllerTest {
         InternProfile profile = createCompletedInternProfileWithAcademicYear(internUser, (short) 2);
         attachCv(profile, pdfBytes("resume-a"), "resume.pdf");
         Internship internship = createInternship(
-                ApplicationMethod.INTERNAL, null, InternshipStatus.OPEN, LocalDate.now().plusDays(30), 4);
+                ApplicationMethod.INTERNAL, null, InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC).plusDays(30), 4);
 
         mockMvc.perform(post(applyUrl(internship.getId()))
                         .with(asIntern())
@@ -757,7 +761,7 @@ class InternshipApplicationControllerTest {
     void externalInternshipCannotReceiveQuestions() throws Exception {
         Internship internship = createInternship(
                 ApplicationMethod.EXTERNAL, "https://careers.example.com/apply",
-                InternshipStatus.OPEN, LocalDate.now().plusDays(30), null);
+                InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC).plusDays(30), null);
 
         mockMvc.perform(post(companyQuestionsUrl(internship.getId()))
                         .with(asCompany())

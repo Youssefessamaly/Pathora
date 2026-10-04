@@ -2,6 +2,8 @@ package com.internplatform.companyprofile;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -50,6 +52,20 @@ public class CompanyProfile {
 
     @Column(name = "onboarding_completed_at")
     private OffsetDateTime onboardingCompletedAt;
+
+    /**
+     * Admin review status for marketplace access (see CompanyApprovalGuard) — entirely
+     * independent of onboarding completeness. A brand-new company always starts PENDING: the
+     * client never gets to choose otherwise, mirroring how InternshipApplication always starts
+     * APPLIED. V15 backfilled every company that existed before this workflow to APPROVED so
+     * existing, already-trusted accounts are never locked out by its introduction.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status", nullable = false, length = 20)
+    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
+
+    @Column(name = "approval_reviewed_at")
+    private OffsetDateTime approvalReviewedAt;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -168,6 +184,23 @@ public class CompanyProfile {
     public void markOnboardingCompleted(OffsetDateTime completedAt) {
         this.onboardingCompleted = true;
         this.onboardingCompletedAt = completedAt;
+    }
+
+    public ApprovalStatus getApprovalStatus() {
+        return approvalStatus;
+    }
+
+    public OffsetDateTime getApprovalReviewedAt() {
+        return approvalReviewedAt;
+    }
+
+    /**
+     * Records an admin's approve/reject decision, keeping the status and review timestamp in
+     * lockstep — same pattern as markOnboardingCompleted, so the two can never diverge.
+     */
+    public void recordApprovalDecision(ApprovalStatus status, OffsetDateTime reviewedAt) {
+        this.approvalStatus = status;
+        this.approvalReviewedAt = reviewedAt;
     }
 
     public OffsetDateTime getCreatedAt() {

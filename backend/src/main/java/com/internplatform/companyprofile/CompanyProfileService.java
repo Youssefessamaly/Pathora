@@ -30,6 +30,14 @@ public class CompanyProfileService {
         return toResponse(profile);
     }
 
+    /** Deliberately NOT gated by CompanyApprovalGuard — a PENDING or REJECTED company must be
+     *  able to check its own status (that is the whole point of the status existing). */
+    @Transactional(readOnly = true)
+    public CompanyApprovalStatusResponse getApprovalStatus(UUID userId) {
+        CompanyProfile profile = findProfileOrThrow(userId);
+        return new CompanyApprovalStatusResponse(profile.getApprovalStatus(), profile.getApprovalReviewedAt());
+    }
+
     @Transactional
     public CompanyProfileResponse upsertProfile(UUID userId, CompanyProfileRequest request) {
         CompanyProfile profile = companyProfileRepository.findByUserId(userId)
