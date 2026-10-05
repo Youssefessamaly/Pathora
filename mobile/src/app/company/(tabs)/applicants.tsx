@@ -4,8 +4,6 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ApplicantPreviewRow } from '@/components/applicant-preview-row';
-import { AuthBackButton } from '@/components/auth-back-button';
-import { OnboardingGuard } from '@/components/onboarding/onboarding-guard';
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
@@ -61,8 +59,7 @@ function CompanyApplicantsScreen({ reviewOnly }: { reviewOnly: boolean }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <AuthBackButton onPress={() => router.back()} style={styles.backButton} />
-      <Text style={styles.title}>{reviewOnly ? 'Applicants requiring review' : 'All applicants'}</Text>
+      <Text style={styles.title}>{reviewOnly ? 'Applicants requiring review' : 'Applicants'}</Text>
 
       {applications === null && !error && (
         <View style={styles.centerContent}>
@@ -85,7 +82,7 @@ function CompanyApplicantsScreen({ reviewOnly }: { reviewOnly: boolean }) {
           <Text style={styles.emptyBody}>
             {reviewOnly
               ? 'New applicants will show up here.'
-              : 'Applications submitted through Pathora will appear here.'}
+              : 'Applicants will appear here once students start applying.'}
           </Text>
         </ScrollView>
       )}
@@ -121,11 +118,7 @@ function CompanyApplicantsScreen({ reviewOnly }: { reviewOnly: boolean }) {
 export default function CompanyApplicantsRoute() {
   const { status } = useLocalSearchParams<{ status?: string }>();
 
-  return (
-    <OnboardingGuard role="COMPANY">
-      <CompanyApplicantsScreen reviewOnly={status === 'APPLIED'} />
-    </OnboardingGuard>
-  );
+  return <CompanyApplicantsScreen reviewOnly={status === 'APPLIED'} />;
 }
 
 const styles = StyleSheet.create({
@@ -133,17 +126,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PathoraColors.paper,
   },
-  backButton: {
-    marginTop: 8,
-    marginLeft: PathoraSpacing[24] - 6,
-    alignSelf: 'flex-start',
-  },
   title: {
     fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 22,
+    fontSize: 20,
     color: PathoraColors.ink900,
+    letterSpacing: -0.2,
     paddingHorizontal: PathoraSpacing[24],
-    paddingTop: PathoraSpacing[16],
+    paddingTop: 8,
     paddingBottom: PathoraSpacing[16],
   },
   centerContent: {

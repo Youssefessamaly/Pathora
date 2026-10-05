@@ -110,11 +110,11 @@ function InternHomeScreen() {
   };
 
   const handleSearchPress = () => {
-    router.push('/intern/internships/index');
+    router.push('/intern/internships');
   };
 
   const handleSeeAllPress = () => {
-    router.push('/intern/internships/index');
+    router.push('/intern/internships');
   };
 
   const handleProfileStrengthPress = () => {

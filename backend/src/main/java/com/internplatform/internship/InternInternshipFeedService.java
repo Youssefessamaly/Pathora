@@ -1,5 +1,6 @@
 package com.internplatform.internship;
 
+import com.internplatform.companyprofile.ApprovalStatus;
 import com.internplatform.companyprofile.CompanyProfile;
 import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.InternProfile;
@@ -52,22 +53,33 @@ public class InternInternshipFeedService {
         this.companyProfileRepository = companyProfileRepository;
     }
 
+    /**
+     * search is optional free text matched against title, location, company name, and
+     * required skill names (see matchesSearch) — case-insensitive, trimmed, substring/partial
+     * match, applied in the same filter pass as the existing eligibility rules so a search
+     * result can never surface anything the plain feed wouldn't already allow. A null/blank
+     * search leaves the feed exactly as before.
+     */
     @Transactional(readOnly = true)
-    public List<InternInternshipResponse> getPersonalizedFeed(UUID userId) {
+    public List<InternInternshipResponse> getPersonalizedFeed(UUID userId, String search) {
         InternProfile profile = requireCompletedInternProfile(userId);
+        String normalizedSearch = normalizeSearchTerm(search);
 
-        List<Internship> eligible = internshipRepository.findAllByStatusAndApplicationDeadlineGreaterThanEqual(
-                        InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC))
-                .stream()
+        List<Internship> openInternships = internshipRepository.findAllByStatusAndApplicationDeadlineGreaterThanEqual(
+                InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC));
+
+        Map<UUID, CompanyProfile> companyProfiles = loadCompanyProfiles(openInternships);
+
+        List<Internship> eligible = openInternships.stream()
                 .filter(internship -> AcademicYearEligibility.satisfies(internship, profile))
+                .filter(internship -> isCompanyApproved(internship, companyProfiles))
+                .filter(internship -> matchesSearch(internship, companyProfiles.get(internship.getCompanyProfileId()), normalizedSearch))
                 .toList();
-
-        Map<UUID, String> companyNames = loadCompanyNames(eligible);
 
         return eligible.stream()
                 .map(internship -> score(internship, profile))
                 .sorted(FEED_ORDER)
-                .map(scored -> toResponse(scored, companyNames.get(scored.internship().getCompanyProfileId())))
+                .map(scored -> toResponse(scored, companyNameOf(scored.internship(), companyProfiles)))
                 .toList();
     }
 
@@ -81,14 +93,18 @@ public class InternInternshipFeedService {
                 .filter(found -> AcademicYearEligibility.satisfies(found, profile))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Internship not found"));
 
-        String companyName = companyProfileRepository.findById(internship.getCompanyProfileId())
-                .map(CompanyProfile::getCompanyName)
-                .orElse(null);
+        CompanyProfile companyProfile = companyProfileRepository.findById(internship.getCompanyProfileId()).orElse(null);
 
-        return toResponse(score(internship, profile), companyName);
+        if (companyProfile == null || companyProfile.getApprovalStatus() != ApprovalStatus.APPROVED) {
+            // Same 404 as "doesn't exist" / "not eligible" — an intern should never be able to
+            // tell a non-approved company's internship apart from one that simply isn't there.
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Internship not found");
+        }
+
+        return toResponse(score(internship, profile), companyProfile.getCompanyName());
     }
 
-    private Map<UUID, String> loadCompanyNames(List<Internship> internships) {
+    private Map<UUID, CompanyProfile> loadCompanyProfiles(List<Internship> internships) {
         Set<UUID> companyProfileIds = internships.stream()
                 .map(Internship::getCompanyProfileId)
                 .collect(Collectors.toSet());
@@ -97,11 +113,65 @@ public class InternInternshipFeedService {
             return Map.of();
         }
 
-        Map<UUID, String> names = new HashMap<>();
+        Map<UUID, CompanyProfile> profiles = new HashMap<>();
         for (CompanyProfile profile : companyProfileRepository.findAllById(companyProfileIds)) {
-            names.put(profile.getId(), profile.getCompanyName());
+            profiles.put(profile.getId(), profile);
         }
-        return names;
+        return profiles;
+    }
+
+    private String companyNameOf(Internship internship, Map<UUID, CompanyProfile> companyProfiles) {
+        CompanyProfile profile = companyProfiles.get(internship.getCompanyProfileId());
+        return profile != null ? profile.getCompanyName() : null;
+    }
+
+    /**
+     * Only an APPROVED company's internships are visible to interns at all — a defense-in-depth
+     * mirror of CompanyApprovalGuard on the company side. In practice every internship's owning
+     * company was APPROVED at creation time and approval decisions are one-way (never reversed),
+     * so this should never actually exclude anything today; it exists so the feed can never
+     * silently start showing a non-approved company's internships if that ever changes.
+     */
+    private boolean isCompanyApproved(Internship internship, Map<UUID, CompanyProfile> companyProfiles) {
+        CompanyProfile profile = companyProfiles.get(internship.getCompanyProfileId());
+        return profile != null && profile.getApprovalStatus() == ApprovalStatus.APPROVED;
+    }
+
+    /** null/blank -> null (no filtering); otherwise trimmed and lower-cased once, up front,
+     *  rather than re-normalizing per internship. */
+    private String normalizeSearchTerm(String rawSearch) {
+        if (rawSearch == null) {
+            return null;
+        }
+        String trimmed = rawSearch.trim();
+        return trimmed.isEmpty() ? null : trimmed.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Plain deterministic case-insensitive substring match — title, location, company name, or
+     * any required skill's name. A null normalizedSearch (nothing/blank was searched) always
+     * matches, so this is a no-op when search isn't used.
+     */
+    private boolean matchesSearch(Internship internship, CompanyProfile companyProfile, String normalizedSearch) {
+        if (normalizedSearch == null) {
+            return true;
+        }
+
+        if (containsIgnoreCase(internship.getTitle(), normalizedSearch)) {
+            return true;
+        }
+        if (containsIgnoreCase(internship.getLocation(), normalizedSearch)) {
+            return true;
+        }
+        if (companyProfile != null && containsIgnoreCase(companyProfile.getCompanyName(), normalizedSearch)) {
+            return true;
+        }
+        return internship.getSkills().stream()
+                .anyMatch(skill -> containsIgnoreCase(skill.getName(), normalizedSearch));
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedNeedle) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(normalizedNeedle);
     }
 
     private InternProfile requireCompletedInternProfile(UUID userId) {

@@ -1,64 +1,100 @@
-import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InternshipFeedCard } from '@/components/internship-feed-card';
 import { PathoraButton } from '@/components/pathora-button';
+import { PathoraSearchInput } from '@/components/pathora-search-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { ApiError, getInternInternships, getInternProfileOrNull, type InternInternship } from '@/lib/api';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
 
+const SEARCH_DEBOUNCE_MS = 350;
+
 /**
- * The Internships tab: the intern's full personalized, backend-ranked feed. The dashboard
- * Home tab shows only a short preview of this same data ("Recommended for you" + See all) —
- * this screen is the complete list, never recalculated or re-sorted client-side.
+ * The Internships tab: the intern's full personalized, backend-ranked feed, with real
+ * text search over title/company/location/skills (GET /intern/internships?search=...). The
+ * dashboard Home tab shows only a short preview of this same data ("Recommended for you" +
+ * See all) — this screen is the complete, searchable list. Results are never re-sorted or
+ * re-filtered client-side; the backend remains the single source of truth for both
+ * eligibility and (when searching) the match itself.
  */
 function InternshipsListScreen() {
   const router = useRouter();
   const { token } = useAuth();
+  const { search: initialSearchParam } = useLocalSearchParams<{ search?: string }>();
+
+  const [query, setQuery] = useState(initialSearchParam ?? '');
+  const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
+  const isSearchActive = debouncedQuery.trim().length > 0;
 
   const [internships, setInternships] = useState<InternInternship[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const hasLoadedOnce = useRef(false);
 
-  const load = useCallback(async () => {
-    if (!token) {
-      return;
-    }
-    try {
-      const data = await getInternInternships(token);
-      setInternships(data);
-      setError(null);
-    } catch (loadError) {
-      if (loadError instanceof ApiError && loadError.status === 403) {
-        // Profile missing or onboarding incomplete — send them to resume onboarding instead
-        // of showing a raw feed error, exactly like the Home tab does.
-        const profile = await getInternProfileOrNull(token).catch(() => null);
-        const nextStep = resolveFirstIncompleteOnboardingStep(profile);
-        router.replace(nextStep ?? '/onboarding/personal');
+  const load = useCallback(
+    async (searchTerm: string) => {
+      if (!token) {
         return;
       }
-      setError(describeOnboardingError(loadError));
-    }
-  }, [token, router]);
+      // Only the very first load (nothing on screen yet) shows the big centered spinner —
+      // a search-driven refetch keeps the current results visible with a small inline
+      // indicator instead, so typing never causes the list to flicker away and back.
+      if (hasLoadedOnce.current) {
+        setIsSearching(true);
+      }
+      try {
+        const data = await getInternInternships(token, searchTerm);
+        setInternships(data);
+        setError(null);
+      } catch (loadError) {
+        if (loadError instanceof ApiError && loadError.status === 403) {
+          // Profile missing or onboarding incomplete — send them to resume onboarding instead
+          // of showing a raw feed error, exactly like the Home tab does.
+          const profile = await getInternProfileOrNull(token).catch(() => null);
+          const nextStep = resolveFirstIncompleteOnboardingStep(profile);
+          router.replace(nextStep ?? '/onboarding/personal');
+          return;
+        }
+        setError(describeOnboardingError(loadError));
+      } finally {
+        hasLoadedOnce.current = true;
+        setIsSearching(false);
+      }
+    },
+    [token, router],
+  );
 
+  // Fires on mount, on every return-to-screen focus, and whenever the debounced query changes
+  // while focused — one source of truth for "when do we (re)fetch", matching the debounce so
+  // fast typing settles into roughly one request rather than one per keystroke.
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      load(debouncedQuery);
+    }, [load, debouncedQuery]),
   );
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await load(debouncedQuery);
     setRefreshing(false);
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <Text style={styles.title}>Internships</Text>
+
+      <PathoraSearchInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search internships, companies, or skills"
+        style={styles.searchInput}
+      />
 
       {internships === null && !error && (
         <View style={styles.centerContent}>
@@ -69,7 +105,12 @@ function InternshipsListScreen() {
       {error && (
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>{error}</Text>
-          <PathoraButton label="Try again" variant="secondary" onPress={load} style={styles.retryButton} />
+          <PathoraButton
+            label="Try again"
+            variant="secondary"
+            onPress={() => load(debouncedQuery)}
+            style={styles.retryButton}
+          />
         </View>
       )}
 
@@ -77,8 +118,17 @@ function InternshipsListScreen() {
         <ScrollView
           contentContainerStyle={styles.emptyContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          <Text style={styles.emptyTitle}>No open internships yet</Text>
-          <Text style={styles.emptyBody}>New opportunities will appear here when companies post them.</Text>
+          {isSearchActive ? (
+            <>
+              <Text style={styles.emptyTitle}>No internships found</Text>
+              <Text style={styles.emptyBody}>Try a different title, company, location, or skill.</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.emptyTitle}>No open internships yet</Text>
+              <Text style={styles.emptyBody}>New opportunities will appear here when companies post them.</Text>
+            </>
+          )}
         </ScrollView>
       )}
 
@@ -87,6 +137,11 @@ function InternshipsListScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
+          {isSearching && (
+            <View style={styles.inlineLoadingRow}>
+              <ActivityIndicator size="small" color={PathoraColors.teal600} />
+            </View>
+          )}
           {internships.map((internship) => (
             <InternshipFeedCard
               key={internship.id}
@@ -119,6 +174,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: PathoraSpacing[16],
   },
+  searchInput: {
+    marginHorizontal: PathoraSpacing[24],
+    marginBottom: PathoraSpacing[16],
+  },
   centerContent: {
     flex: 1,
     alignItems: 'center',
@@ -146,6 +205,7 @@ const styles = StyleSheet.create({
     fontFamily: PathoraFonts.en.extraBold,
     fontSize: 18,
     color: PathoraColors.ink900,
+    textAlign: 'center',
   },
   emptyBody: {
     fontFamily: PathoraFonts.en.regular,
@@ -157,5 +217,9 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: PathoraSpacing[24],
     paddingBottom: PathoraSpacing[24],
+  },
+  inlineLoadingRow: {
+    alignItems: 'center',
+    paddingBottom: PathoraSpacing[12],
   },
 });

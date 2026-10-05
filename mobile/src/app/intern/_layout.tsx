@@ -22,7 +22,10 @@ function InternTabsGuard({ children }: { children: ReactNode }) {
       return;
     }
     if (!isAuthenticated) {
-      router.replace('/login');
+      // No valid session at all — clear any accumulated authenticated history (whatever
+      // depth this guard was mounted at) and route to the signed-out flow via replacement.
+      router.dismissAll();
+      router.replace('/welcome');
       return;
     }
     if (!isIntern) {

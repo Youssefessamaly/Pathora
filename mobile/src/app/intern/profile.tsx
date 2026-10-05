@@ -55,7 +55,10 @@ function ProfileScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/login');
+    // Clear the entire authenticated stack along with the session so Back can never reopen
+    // a protected screen after logout.
+    router.dismissAll();
+    router.replace('/welcome');
   };
 
   const handleEditProfile = () => {

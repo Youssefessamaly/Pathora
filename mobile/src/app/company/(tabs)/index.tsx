@@ -1,6 +1,6 @@
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,89 +15,12 @@ import {
   type CompanyProfile,
 } from '@/lib/api';
 import { getAllCompanyApplications, type CompanyApplicantEntry } from '@/lib/company-applicants';
-import { describeOnboardingError, resolveCompanyPostAuthRoute } from '@/lib/onboarding';
+import { describeOnboardingError } from '@/lib/onboarding';
 import { initialsFor } from '@/lib/initials';
 
-const APPLICANT_PREVIEW_COUNT = 3;
-
-/**
- * Client-side gate for the company home: requires an authenticated COMPANY session AND a
- * freshly-verified APPROVED status. The backend independently enforces both on every request
- * regardless of this guard — this exists so a PENDING/REJECTED company (or one still mid
- * onboarding) that lands on /company directly, or via a stale restored route, is bounced to
- * the correct screen instead of seeing a dashboard whose data it can't actually use. Re-checked
- * on every focus (not just first mount) via resolveCompanyPostAuthRoute — the same resolver
- * login and the onboarding-completion screen use — so all entry points can never disagree.
- */
-function CompanyHomeGuard({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const { isAuthenticated, isInitializing, user, token, signOut } = useAuth();
-  const isCompany = user?.role === 'COMPANY';
-
-  const [checkState, setCheckState] = useState<'checking' | 'approved' | 'error'>('checking');
-
-  useEffect(() => {
-    if (isInitializing) {
-      return;
-    }
-    if (!isAuthenticated) {
-      router.replace('/login');
-      return;
-    }
-    if (!isCompany) {
-      // Signed in, but as the wrong role — send them to their own home instead of
-      // bouncing an already-authenticated user back to the login screen.
-      router.replace(user?.role === 'INTERN' ? '/intern' : '/login');
-    }
-  }, [isInitializing, isAuthenticated, isCompany, user?.role, router]);
-
-  const checkApproval = useCallback(() => {
-    if (!token) {
-      return;
-    }
-    setCheckState('checking');
-    resolveCompanyPostAuthRoute(token)
-      .then((route) => {
-        if (route === '/company') {
-          setCheckState('approved');
-        } else {
-          router.replace(route);
-        }
-      })
-      .catch(() => setCheckState('error'));
-  }, [token, router]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!isInitializing && isAuthenticated && isCompany) {
-        checkApproval();
-      }
-    }, [isInitializing, isAuthenticated, isCompany, checkApproval]),
-  );
-
-  const handleGuardSignOut = async () => {
-    await signOut();
-    router.replace('/login');
-  };
-
-  if (isInitializing || !isAuthenticated || !isCompany || checkState === 'checking') {
-    return <View style={styles.guardFallback} />;
-  }
-
-  if (checkState === 'error') {
-    return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <View style={styles.centerContent}>
-          <Text style={styles.errorText}>Unable to verify your account status. Please try again.</Text>
-          <PathoraButton label="Try again" variant="secondary" onPress={checkApproval} style={styles.retryButton} />
-          <PathoraButton label="Log out" variant="secondary" onPress={handleGuardSignOut} style={styles.retryButton} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return <>{children}</>;
-}
+/** "Preferably the latest two" per the frozen design — a small, bounded preview, never the
+ *  full list (that's what "See all" is for). */
+const APPLICANT_PREVIEW_COUNT = 2;
 
 function companyInitials(companyName: string | null | undefined, email: string | undefined): string {
   const name = companyName?.trim();
@@ -204,9 +127,9 @@ function UpcomingInterviewsCard() {
           size={18}
           tintColor={PathoraColors.amber600}
         />
-        <Text style={styles.interviewsTitle}>No upcoming interviews yet</Text>
+        <Text style={styles.interviewsTitle}>No upcoming interviews</Text>
       </View>
-      <Text style={styles.interviewsBody}>Scheduled interviews will appear here.</Text>
+      <Text style={styles.interviewsBody}>Scheduled interviews will show up here.</Text>
     </View>
   );
 }
@@ -271,7 +194,10 @@ function CompanyHomeScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/login');
+    // Clear the entire authenticated stack along with the session so Back can never reopen
+    // a protected screen after logout.
+    router.dismissAll();
+    router.replace('/welcome');
   };
 
   const handleAvatarPress = () => {
@@ -338,11 +264,12 @@ function CompanyHomeScreen() {
         <View style={styles.statsRow}>
           <StatCard label="Active" value={activeCount} active onPress={() => router.push('/company/internships')} />
           {/* No "draft" state exists in the current internship model (status is only
-              OPEN/CLOSED) — shown muted/non-interactive rather than invented. */}
-          <StatCard label="Drafts" value={0} active={false} />
+              OPEN/CLOSED) — genuinely 0, never inferred from CLOSED. Still tappable, matching
+              the frozen layout, since it lands on the real Internships list either way. */}
+          <StatCard label="Drafts" value={0} active={false} onPress={() => router.push('/company/internships')} />
           {/* CLOSED is a real status, but it is a distinct, one-way state (no "reopen" action
-              exists) — it is not the same concept as "paused," so it is never relabeled here. */}
-          <StatCard label="Paused" value={0} active={false} />
+              exists) — it is not the same concept as "paused," so Paused stays genuinely 0. */}
+          <StatCard label="Paused" value={0} active={false} onPress={() => router.push('/company/internships')} />
         </View>
 
         <View style={styles.section}>
@@ -370,7 +297,7 @@ function CompanyHomeScreen() {
             applications={(applications ?? []).slice(0, APPLICANT_PREVIEW_COUNT)}
             isLoading={applicantsLoading}
             emptyTitle="No applicants yet"
-            emptyBody="Applications submitted through Pathora will appear here."
+            emptyBody="Applicants will appear here once students start applying."
             onApplicantPress={goToApplicantDetail}
           />
         </View>
@@ -380,19 +307,11 @@ function CompanyHomeScreen() {
 }
 
 export default function CompanyHomeRoute() {
-  return (
-    <CompanyHomeGuard>
-      <CompanyHomeScreen />
-    </CompanyHomeGuard>
-  );
+  return <CompanyHomeScreen />;
 }
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1,
-    backgroundColor: PathoraColors.paper,
-  },
-  guardFallback: {
     flex: 1,
     backgroundColor: PathoraColors.paper,
   },

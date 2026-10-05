@@ -11,8 +11,9 @@ export type PathoraSearchBarProps = {
 
 /**
  * The rounded white "Search internships" bar from the dashboard design. Not a real text
- * field — tapping it navigates to wherever actual browsing/search happens (see caller), since
- * there is no search-filtering backend yet. Never produces fake results itself.
+ * field — tapping it navigates to the Internships screen, which has the actual typable search
+ * input (see PathoraSearchInput) and real backend-filtered results. Never produces fake
+ * results itself.
  */
 export function PathoraSearchBar({ placeholder, onPress, style }: PathoraSearchBarProps) {
   return (

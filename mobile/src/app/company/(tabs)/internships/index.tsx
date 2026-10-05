@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,15 +12,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AuthBackButton } from '@/components/auth-back-button';
-import { OnboardingGuard } from '@/components/onboarding/onboarding-guard';
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { getCompanyInternships, type CompanyInternship } from '@/lib/api';
+import { getCompanyInternships, type CompanyInternship, type InternshipStatus } from '@/lib/api';
 import { formatDisplayDate } from '@/lib/date';
 import { describeOnboardingError } from '@/lib/onboarding';
 import { WORK_MODE_LABELS } from '@/lib/internship-options';
+
+/** 'all' plus every real backend InternshipStatus value — no Draft/Paused filter, since the
+ *  backend has no such states (see the two disabled chips rendered after these). */
+type RealFilter = 'all' | InternshipStatus;
 
 function InternshipCard({ internship, onPress }: { internship: CompanyInternship; onPress: () => void }) {
   const isOpen = internship.status === 'OPEN';
@@ -50,6 +53,30 @@ function InternshipCard({ internship, onPress }: { internship: CompanyInternship
   );
 }
 
+function FilterChip({
+  label,
+  active,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || !onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={[styles.chip, active && styles.chipActive, disabled && styles.chipDisabled]}>
+      <Text style={[styles.chipText, active && styles.chipTextActive, disabled && styles.chipTextDisabled]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function CompanyInternshipsListScreen() {
   const router = useRouter();
   const { token } = useAuth();
@@ -57,6 +84,7 @@ function CompanyInternshipsListScreen() {
   const [internships, setInternships] = useState<CompanyInternship[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<RealFilter>('all');
 
   const load = useCallback(async () => {
     if (!token) {
@@ -87,12 +115,27 @@ function CompanyInternshipsListScreen() {
     router.push('/company/internships/new');
   };
 
+  const visibleInternships = useMemo(() => {
+    if (!internships) {
+      return internships;
+    }
+    if (filter === 'all') {
+      return internships;
+    }
+    return internships.filter((internship) => internship.status === filter);
+  }, [internships, filter]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <View style={styles.headerRow}>
-        <AuthBackButton onPress={() => router.back()} />
-        <Text style={styles.headerTitle}>Your internships</Text>
-        <View style={styles.headerSpacer} />
+      <View style={styles.appBar}>
+        <Text style={styles.appBarTitle}>My Internships</Text>
+        <Pressable
+          onPress={handleCreate}
+          accessibilityRole="button"
+          accessibilityLabel="Create internship"
+          style={styles.appBarAction}>
+          <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' }} size={18} tintColor={PathoraColors.ink900} />
+        </Pressable>
       </View>
 
       {internships === null && !error && (
@@ -113,46 +156,49 @@ function CompanyInternshipsListScreen() {
           contentContainerStyle={styles.emptyContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
           <Text style={styles.emptyTitle}>No internships yet</Text>
-          <Text style={styles.emptyBody}>
-            Post your first internship to start attracting Pathora interns.
-          </Text>
-          <PathoraButton label="Post internship" variant="primary" onPress={handleCreate} />
+          <Text style={styles.emptyBody}>Create your first internship to start receiving applicants.</Text>
+          <PathoraButton label="Create internship" variant="primary" onPress={handleCreate} />
         </ScrollView>
       )}
 
       {internships !== null && !error && internships.length > 0 && (
-        <ScrollView
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          <PathoraButton
-            label="Post internship"
-            variant="primary"
-            onPress={handleCreate}
-            style={styles.createButton}
-          />
+        <>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+            style={styles.chipScroll}>
+            <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+            <FilterChip label="Open" active={filter === 'OPEN'} onPress={() => setFilter('OPEN')} />
+            <FilterChip label="Closed" active={filter === 'CLOSED'} onPress={() => setFilter('CLOSED')} />
+            {/* Draft and Paused aren't real backend states (InternshipStatus is only
+                OPEN/CLOSED) — rendered disabled rather than wired to a fake filter. */}
+            <FilterChip label="Draft" disabled />
+            <FilterChip label="Paused" disabled />
+          </ScrollView>
 
-          {internships.map((internship) => (
-            <InternshipCard
-              key={internship.id}
-              internship={internship}
-              onPress={() =>
-                router.push({ pathname: '/company/internships/[id]', params: { id: internship.id } })
-              }
-            />
-          ))}
-        </ScrollView>
+          <ScrollView
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
+            {(visibleInternships ?? []).map((internship) => (
+              <InternshipCard
+                key={internship.id}
+                internship={internship}
+                onPress={() =>
+                  router.push({ pathname: '/company/internships/[id]', params: { id: internship.id } })
+                }
+              />
+            ))}
+          </ScrollView>
+        </>
       )}
     </SafeAreaView>
   );
 }
 
 export default function CompanyInternshipsListRoute() {
-  return (
-    <OnboardingGuard role="COMPANY">
-      <CompanyInternshipsListScreen />
-    </OnboardingGuard>
-  );
+  return <CompanyInternshipsListScreen />;
 }
 
 const styles = StyleSheet.create({
@@ -160,22 +206,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PathoraColors.paper,
   },
-  headerRow: {
+  appBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: PathoraSpacing[24],
     paddingTop: 8,
     paddingBottom: PathoraSpacing[16],
   },
-  headerTitle: {
-    flex: 1,
+  appBarTitle: {
     fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 18,
+    fontSize: 20,
     color: PathoraColors.ink900,
-    textAlign: 'center',
+    letterSpacing: -0.2,
   },
-  headerSpacer: {
-    width: 36,
+  appBarAction: {
+    width: 34,
+    height: 34,
+    borderRadius: PathoraRadius[999],
+    backgroundColor: PathoraColors.surface,
+    borderWidth: 1,
+    borderColor: PathoraColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centerContent: {
     flex: 1,
@@ -213,12 +266,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: PathoraSpacing[12],
   },
+  chipScroll: {
+    flexGrow: 0,
+  },
+  chipRow: {
+    paddingHorizontal: PathoraSpacing[24],
+    paddingBottom: PathoraSpacing[16],
+    gap: PathoraSpacing[8],
+  },
+  chip: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: PathoraRadius[999],
+    borderWidth: 1.5,
+    borderColor: PathoraColors.borderStrong,
+    backgroundColor: PathoraColors.surface,
+  },
+  chipActive: {
+    backgroundColor: PathoraColors.ink900,
+    borderColor: PathoraColors.ink900,
+  },
+  chipDisabled: {
+    opacity: 0.45,
+  },
+  chipText: {
+    fontFamily: PathoraFonts.en.semiBold,
+    fontSize: 13,
+    color: PathoraColors.textSecondary,
+  },
+  chipTextActive: {
+    color: PathoraColors.surface,
+  },
+  chipTextDisabled: {
+    color: PathoraColors.textTertiary,
+  },
   listContent: {
     paddingHorizontal: PathoraSpacing[24],
     paddingBottom: PathoraSpacing[24],
-  },
-  createButton: {
-    marginBottom: PathoraSpacing[20],
   },
   card: {
     borderRadius: PathoraRadius[14],

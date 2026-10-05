@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,9 +37,10 @@ public class InternInternshipController {
 
     @GetMapping
     public List<InternInternshipResponse> getFeed(
-            @AuthenticationPrincipal Jwt jwt
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String search
     ) {
-        return internInternshipFeedService.getPersonalizedFeed(currentUserId(jwt));
+        return internInternshipFeedService.getPersonalizedFeed(currentUserId(jwt), search);
     }
 
     @GetMapping("/{internshipId}")

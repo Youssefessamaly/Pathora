@@ -47,6 +47,10 @@ export default function LoginScreen() {
           if (!token) {
             throw new Error('Missing access token after sign-in');
           }
+          // Crossing the auth boundary: pop Welcome/AccountType/Login (and anything else
+          // still sitting in the stack below this point) back to the root before replacing
+          // it, so hardware Back from the authenticated app can never reveal Login again.
+          router.dismissAll();
           router.replace(await resolveInternPostAuthRoute(token));
         } catch {
           // Signed in, but couldn't determine onboarding status (e.g. network hiccup) —
@@ -63,6 +67,8 @@ export default function LoginScreen() {
           if (!token) {
             throw new Error('Missing access token after sign-in');
           }
+          // Same auth-boundary hardening as the INTERN branch above.
+          router.dismissAll();
           router.replace(await resolveCompanyPostAuthRoute(token));
         } catch {
           // Signed in, but couldn't determine onboarding/approval status (e.g. network

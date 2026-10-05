@@ -852,9 +852,17 @@ export type InternInternship = {
   updatedAt: string;
 };
 
-/** Personalized feed, already sorted by relevance by the backend — never re-sort client-side. */
-export function getInternInternships(token: string): Promise<InternInternship[]> {
-  return apiGet<InternInternship[]>('/intern/internships', { token });
+/**
+ * Personalized feed, already sorted by relevance by the backend — never re-sort client-side.
+ * `search` is optional free text matched server-side against title, location, company name,
+ * and required skills (case-insensitive, trimmed, partial match) — the same eligibility rules
+ * (OPEN, not expired, academic-year, company-approved) apply whether searching or not. Omitted
+ * or blank behaves exactly like calling without a query at all.
+ */
+export function getInternInternships(token: string, search?: string): Promise<InternInternship[]> {
+  const trimmedSearch = search?.trim();
+  const query = trimmedSearch ? `?search=${encodeURIComponent(trimmedSearch)}` : '';
+  return apiGet<InternInternship[]>(`/intern/internships${query}`, { token });
 }
 
 export function getInternInternship(token: string, internshipId: string): Promise<InternInternship> {

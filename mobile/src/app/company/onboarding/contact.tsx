@@ -77,6 +77,10 @@ function CompanyContactScreen() {
       // company is still PENDING at this point, so the shared resolver sends it to the
       // approval-pending screen instead (and APPROVED/REJECTED are still handled correctly
       // for the rarer case of a company revisiting this step after already being decided).
+      // Pop the entire stack (onboarding steps, register/login, etc.) back to its root, then
+      // replace that root's content — same pattern as onboarding/skills.tsx's INTERN
+      // equivalent — so nothing from before onboarding completed remains in Back history.
+      router.dismissAll();
       router.replace(await resolveCompanyPostAuthRoute(token));
     } catch (error) {
       const missingFields = getOnboardingMissingFields(error);

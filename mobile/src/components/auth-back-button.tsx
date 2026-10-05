@@ -11,7 +11,9 @@ export type AuthBackButtonProps = {
 
 export function AuthBackButton({ onPress, style }: AuthBackButtonProps) {
   const router = useRouter();
-  const handlePress = onPress ?? (() => router.replace('/'));
+  // '/' is now the launch splash gate, not a screen to land back on — the default destination
+  // is the Welcome screen it hands off to.
+  const handlePress = onPress ?? (() => router.replace('/welcome'));
 
   return (
     <Pressable

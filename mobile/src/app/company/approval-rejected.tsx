@@ -70,7 +70,8 @@ function ApprovalRejectedScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/login');
+    router.dismissAll();
+    router.replace('/welcome');
   };
 
   return (

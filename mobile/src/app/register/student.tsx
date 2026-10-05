@@ -65,6 +65,10 @@ export default function StudentRegistrationScreen() {
       if (!token) {
         throw new Error('Missing access token after sign-in');
       }
+      // Crossing the auth boundary: pop Welcome/AccountType/RegisterStudent back to the root
+      // before replacing it, so Back from onboarding (or later, /intern) can never reveal
+      // the pre-auth signup flow.
+      router.dismissAll();
       router.replace(await resolveInternPostAuthRoute(token));
     } catch {
       // Registration itself succeeded — only the automatic sign-in failed (e.g. a network
