@@ -8,16 +8,12 @@ import { PathoraButton } from '@/components/pathora-button';
 import { PathoraCheckbox } from '@/components/pathora-checkbox';
 import { PathoraInput } from '@/components/pathora-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
-import { useAuth } from '@/context/auth-context';
 import { ApiError, NetworkError, registerIntern } from '@/lib/api';
-import { getAccessToken } from '@/lib/auth-token';
-import { resolveInternPostAuthRoute } from '@/lib/onboarding';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function StudentRegistrationScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,35 +42,16 @@ export default function StudentRegistrationScreen() {
 
     try {
       await registerIntern({ email: trimmedEmail, password });
+
+      // Registration succeeded. The register endpoint does not create a login session,
+      // so send the user to the login page instead of signing them in automatically.
+      router.replace('/login');
     } catch (error) {
       if (error instanceof ApiError || error instanceof NetworkError) {
         setSubmitError(error.message);
       } else {
         setSubmitError('Something went wrong. Please try again.');
       }
-      setIsSubmitting(false);
-      return;
-    }
-
-    // The account now exists. The register endpoint doesn't return a session, so sign in
-    // immediately with the same credentials still held in form state — the intern must feel
-    // logged in right away, never bounced back to the Login screen after a successful signup.
-    try {
-      await signIn({ email: trimmedEmail, password });
-      const token = await getAccessToken();
-      if (!token) {
-        throw new Error('Missing access token after sign-in');
-      }
-      // Crossing the auth boundary: pop Welcome/AccountType/RegisterStudent back to the root
-      // before replacing it, so Back from onboarding (or later, /intern) can never reveal
-      // the pre-auth signup flow.
-      router.dismissAll();
-      router.replace(await resolveInternPostAuthRoute(token));
-    } catch {
-      // Registration itself succeeded — only the automatic sign-in failed (e.g. a network
-      // hiccup). Don't claim registration failed; send them to log in instead of leaving
-      // them stuck on this form or silently retrying with the password still in memory.
-      router.replace('/login');
     } finally {
       setIsSubmitting(false);
     }
@@ -143,7 +120,10 @@ export default function StudentRegistrationScreen() {
             onPress={() => setAgreedToTerms((current) => !current)}
             hitSlop={4}
             style={styles.termsRow}>
-            <PathoraCheckbox checked={agreedToTerms} onToggle={() => setAgreedToTerms((current) => !current)} />
+            <PathoraCheckbox
+              checked={agreedToTerms}
+              onToggle={() => setAgreedToTerms((current) => !current)}
+            />
             <Text style={styles.termsText}>
               I agree to Pathora&apos;s Terms of Service and Privacy Policy.
             </Text>

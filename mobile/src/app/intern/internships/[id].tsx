@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
@@ -9,7 +9,14 @@ import { OnboardingGuard } from '@/components/onboarding/onboarding-guard';
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { ApiError, getInternInternship, getInternProfileOrNull, type InternInternship } from '@/lib/api';
+import {
+  ApiError,
+  favoriteInternship,
+  getInternInternship,
+  getInternProfileOrNull,
+  type InternInternship,
+  unfavoriteInternship,
+} from '@/lib/api';
 import { formatDisplayDate } from '@/lib/date';
 import {
   buildMatchExplanations,
@@ -37,6 +44,7 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
   const [notFound, setNotFound] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [isOpeningExternalUrl, setIsOpeningExternalUrl] = useState(false);
+  const [isUpdatingFavorite, setIsUpdatingFavorite] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) {
@@ -67,6 +75,28 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
       load();
     }, [load]),
   );
+
+  const handleFavoritePress = async () => {
+    if (!token || !internship || isUpdatingFavorite) {
+      return;
+    }
+
+    setIsUpdatingFavorite(true);
+    try {
+      if (internship.favorited) {
+        await unfavoriteInternship(token, internship.id);
+      } else {
+        await favoriteInternship(token, internship.id);
+      }
+      setInternship((current) =>
+        current ? { ...current, favorited: !current.favorited } : current,
+      );
+    } catch {
+      Alert.alert('Unable to update favorite', 'Please try again.');
+    } finally {
+      setIsUpdatingFavorite(false);
+    }
+  };
 
   const handleApplyPress = async (current: InternInternship) => {
     setApplyError(null);
@@ -145,7 +175,32 @@ function InternInternshipDetailsScreen({ internshipId }: { internshipId: string 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <AuthBackButton onPress={() => router.back()} style={styles.backButton} />
 
-        <Text style={styles.title}>{internship.title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{internship.title}</Text>
+          <Pressable
+            onPress={handleFavoritePress}
+            disabled={isUpdatingFavorite}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={internship.favorited ? 'Remove from favorites' : 'Add to favorites'}
+            accessibilityState={{ selected: internship.favorited, disabled: isUpdatingFavorite }}
+            style={({ pressed }) => [
+              styles.favoriteButton,
+              internship.favorited && styles.favoriteButtonActive,
+              pressed && !isUpdatingFavorite && styles.favoriteButtonPressed,
+              isUpdatingFavorite && styles.favoriteButtonDisabled,
+            ]}>
+            <SymbolView
+              name={
+                internship.favorited
+                  ? { ios: 'bookmark.fill', android: 'bookmark', web: 'bookmark' }
+                  : { ios: 'bookmark', android: 'bookmark_border', web: 'bookmark_border' }
+              }
+              size={22}
+              tintColor={internship.favorited ? PathoraColors.teal700 : PathoraColors.textSecondary}
+            />
+          </Pressable>
+        </View>
         <Text style={styles.companyName}>{internship.companyName}</Text>
 
         <View style={styles.matchBadge}>
@@ -287,11 +342,37 @@ const styles = StyleSheet.create({
   retryButton: {
     minWidth: 140,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: PathoraSpacing[12],
+    marginBottom: 4,
+  },
   title: {
+    flex: 1,
     fontFamily: PathoraFonts.en.extraBold,
     fontSize: 22,
     color: PathoraColors.ink900,
-    marginBottom: 4,
+  },
+  favoriteButton: {
+    width: 42,
+    height: 42,
+    borderRadius: PathoraRadius[12],
+    borderWidth: 1,
+    borderColor: PathoraColors.border,
+    backgroundColor: PathoraColors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: PathoraColors.teal100,
+    borderColor: PathoraColors.teal400,
+  },
+  favoriteButtonPressed: {
+    opacity: 0.7,
+  },
+  favoriteButtonDisabled: {
+    opacity: 0.45,
   },
   companyName: {
     fontFamily: PathoraFonts.en.medium,

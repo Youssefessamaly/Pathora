@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBackButton } from '@/components/auth-back-button';
@@ -40,7 +40,10 @@ export default function CompanyRegistrationScreen() {
 
     try {
       await registerCompany({ email: email.trim(), password });
-      Alert.alert('Account created', 'Your company account was created successfully.');
+
+      // Registration succeeded. Send the company to the login page so they can
+      // authenticate normally with their newly created account.
+      router.replace('/login');
     } catch (error) {
       if (error instanceof ApiError || error instanceof NetworkError) {
         setSubmitError(error.message);
@@ -119,7 +122,10 @@ export default function CompanyRegistrationScreen() {
             onPress={() => setAgreedToTerms((current) => !current)}
             hitSlop={4}
             style={styles.termsRow}>
-            <PathoraCheckbox checked={agreedToTerms} onToggle={() => setAgreedToTerms((current) => !current)} />
+            <PathoraCheckbox
+              checked={agreedToTerms}
+              onToggle={() => setAgreedToTerms((current) => !current)}
+            />
             <Text style={styles.termsText}>
               I agree to Pathora&apos;s Terms of Service and Privacy Policy.
             </Text>

@@ -6,6 +6,8 @@ import com.internplatform.companyprofile.CompanyProfileRepository;
 import com.internplatform.internprofile.InternProfile;
 import com.internplatform.internprofile.InternProfileRepository;
 import com.internplatform.internprofile.Skill;
+import com.internplatform.internshipfavorite.InternshipFavorite;
+import com.internplatform.internshipfavorite.InternshipFavoriteRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,15 +44,18 @@ public class InternInternshipFeedService {
     private final InternshipRepository internshipRepository;
     private final InternProfileRepository internProfileRepository;
     private final CompanyProfileRepository companyProfileRepository;
+    private final InternshipFavoriteRepository favoriteRepository;
 
     public InternInternshipFeedService(
             InternshipRepository internshipRepository,
             InternProfileRepository internProfileRepository,
-            CompanyProfileRepository companyProfileRepository
+            CompanyProfileRepository companyProfileRepository,
+            InternshipFavoriteRepository favoriteRepository
     ) {
         this.internshipRepository = internshipRepository;
         this.internProfileRepository = internProfileRepository;
         this.companyProfileRepository = companyProfileRepository;
+        this.favoriteRepository = favoriteRepository;
     }
 
     /**
@@ -69,6 +74,7 @@ public class InternInternshipFeedService {
                 InternshipStatus.OPEN, LocalDate.now(ZoneOffset.UTC));
 
         Map<UUID, CompanyProfile> companyProfiles = loadCompanyProfiles(openInternships);
+        Set<UUID> favoriteInternshipIds = favoriteInternshipIds(profile.getId());
 
         List<Internship> eligible = openInternships.stream()
                 .filter(internship -> AcademicYearEligibility.satisfies(internship, profile))
@@ -79,7 +85,11 @@ public class InternInternshipFeedService {
         return eligible.stream()
                 .map(internship -> score(internship, profile))
                 .sorted(FEED_ORDER)
-                .map(scored -> toResponse(scored, companyNameOf(scored.internship(), companyProfiles)))
+                .map(scored -> toResponse(
+                        scored,
+                        companyNameOf(scored.internship(), companyProfiles),
+                        favoriteInternshipIds.contains(scored.internship().getId())
+                ))
                 .toList();
     }
 
@@ -101,7 +111,46 @@ public class InternInternshipFeedService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Internship not found");
         }
 
-        return toResponse(score(internship, profile), companyProfile.getCompanyName());
+        boolean favorited = favoriteRepository.existsByInternProfileIdAndInternshipId(profile.getId(), internship.getId());
+        return toResponse(score(internship, profile), companyProfile.getCompanyName(), favorited);
+    }
+
+    /**
+     * Returns the intern's saved internships newest-save first. Favorites persist in the DB,
+     * but only internships that are still visible under the normal feed rules are returned.
+     */
+    @Transactional(readOnly = true)
+    public List<InternInternshipResponse> getFavoriteInternships(UUID userId) {
+        InternProfile profile = requireCompletedInternProfile(userId);
+        List<InternshipFavorite> favorites = favoriteRepository.findAllByInternProfileIdOrderByCreatedAtDesc(profile.getId());
+
+        if (favorites.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> internshipIds = favorites.stream()
+                .map(InternshipFavorite::getInternshipId)
+                .toList();
+
+        Map<UUID, Internship> internshipsById = internshipRepository.findAllById(internshipIds).stream()
+                .collect(Collectors.toMap(Internship::getId, internship -> internship));
+        Map<UUID, CompanyProfile> companyProfiles = loadCompanyProfiles(internshipsById.values().stream().toList());
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+
+        return favorites.stream()
+                .map(favorite -> internshipsById.get(favorite.getInternshipId()))
+                .filter(internship -> internship != null)
+                .filter(internship -> internship.getStatus() == InternshipStatus.OPEN)
+                .filter(internship -> !internship.getApplicationDeadline().isBefore(today))
+                .filter(internship -> AcademicYearEligibility.satisfies(internship, profile))
+                .filter(internship -> isCompanyApproved(internship, companyProfiles))
+                .map(internship -> score(internship, profile))
+                .map(scored -> toResponse(scored, companyNameOf(scored.internship(), companyProfiles), true))
+                .toList();
+    }
+
+    private Set<UUID> favoriteInternshipIds(UUID internProfileId) {
+        return new HashSet<>(favoriteRepository.findInternshipIdsByInternProfileId(internProfileId));
     }
 
     private Map<UUID, CompanyProfile> loadCompanyProfiles(List<Internship> internships) {
@@ -251,7 +300,7 @@ public class InternInternshipFeedService {
         return Math.max(0, Math.min(100, value));
     }
 
-    private InternInternshipResponse toResponse(ScoredInternship scored, String companyName) {
+    private InternInternshipResponse toResponse(ScoredInternship scored, String companyName, boolean favorited) {
         Internship internship = scored.internship();
 
         List<InternshipSkillResponse> skills = internship.getSkills().stream()
@@ -288,6 +337,7 @@ public class InternInternshipFeedService {
                 scored.totalRequiredSkillCount(),
                 matchedSkills,
                 scored.majorMatch(),
+                favorited,
                 internship.getCreatedAt(),
                 internship.getUpdatedAt()
         );

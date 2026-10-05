@@ -1,3 +1,4 @@
+import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
@@ -11,12 +12,23 @@ function companyInitials(companyName: string): string {
   return (letters.join('') || '?').toUpperCase();
 }
 
+type InternshipFeedCardProps = {
+  item: InternInternship;
+  onPress: () => void;
+  onFavoritePress?: () => void;
+  favoriteDisabled?: boolean;
+};
+
 /**
- * The personalized internship card shared by the dashboard's "Recommended for you" preview
- * and the full Internships tab list. relevancePercentage/ordering always come straight from
- * the backend — never recalculated here.
+ * The personalized internship card shared by the dashboard, full Internships list, and
+ * Favorites list. relevancePercentage/ordering always come straight from the backend.
  */
-export function InternshipFeedCard({ item, onPress }: { item: InternInternship; onPress: () => void }) {
+export function InternshipFeedCard({
+  item,
+  onPress,
+  onFavoritePress,
+  favoriteDisabled = false,
+}: InternshipFeedCardProps) {
   const skillNames = item.skills.slice(0, 4).map((skill) => skill.name);
   const extraSkillCount = item.skills.length - skillNames.length;
 
@@ -37,6 +49,34 @@ export function InternshipFeedCard({ item, onPress }: { item: InternInternship; 
             {item.companyName}
           </Text>
         </View>
+        {onFavoritePress && (
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              onFavoritePress();
+            }}
+            disabled={favoriteDisabled}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={item.favorited ? 'Remove from favorites' : 'Add to favorites'}
+            accessibilityState={{ selected: item.favorited, disabled: favoriteDisabled }}
+            style={({ pressed }) => [
+              styles.favoriteButton,
+              item.favorited && styles.favoriteButtonActive,
+              pressed && !favoriteDisabled && styles.favoriteButtonPressed,
+              favoriteDisabled && styles.favoriteButtonDisabled,
+            ]}>
+            <SymbolView
+              name={
+                item.favorited
+                  ? { ios: 'bookmark.fill', android: 'bookmark', web: 'bookmark' }
+                  : { ios: 'bookmark', android: 'bookmark_border', web: 'bookmark_border' }
+              }
+              size={20}
+              tintColor={item.favorited ? PathoraColors.teal700 : PathoraColors.textSecondary}
+            />
+          </Pressable>
+        )}
       </View>
 
       <Text style={styles.cardMeta} numberOfLines={1}>
@@ -114,6 +154,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: PathoraColors.textSecondary,
     marginTop: 2,
+  },
+  favoriteButton: {
+    width: 38,
+    height: 38,
+    borderRadius: PathoraRadius[12],
+    borderWidth: 1,
+    borderColor: PathoraColors.border,
+    backgroundColor: PathoraColors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    backgroundColor: PathoraColors.teal100,
+    borderColor: PathoraColors.teal400,
+  },
+  favoriteButtonPressed: {
+    opacity: 0.7,
+  },
+  favoriteButtonDisabled: {
+    opacity: 0.45,
   },
   cardMeta: {
     fontFamily: PathoraFonts.en.regular,

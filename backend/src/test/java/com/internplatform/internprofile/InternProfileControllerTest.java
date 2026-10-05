@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -48,6 +49,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -406,6 +409,48 @@ class InternProfileControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cvFileName").value("resume.pdf"))
                 .andExpect(jsonPath("$.cvUploadedAt").exists());
+    }
+
+    @Test
+    void internCanDownloadOwnUploadedCvForPreview() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+        byte[] pdf = validPdfBytes();
+
+        mockMvc.perform(multipart(HttpMethod.POST, "/api/v1/intern/profile/cv")
+                        .file(new MockMultipartFile("file", "resume.pdf", "application/pdf", pdf))
+                        .with(asIntern()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/intern/profile/cv").with(asIntern()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+                        org.hamcrest.Matchers.containsString("inline")))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+                        org.hamcrest.Matchers.containsString("resume.pdf")))
+                .andExpect(content().bytes(pdf));
+    }
+
+    @Test
+    void downloadingCvWithoutUploadedCvReturns404() throws Exception {
+        patchProfile(Map.of("firstName", "Amina"));
+
+        mockMvc.perform(get("/api/v1/intern/profile/cv").with(asIntern()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void companyCannotDownloadInternProfileCv() throws Exception {
+        User companyUser = userRepository.saveAndFlush(
+                new User(
+                        "company-" + UUID.randomUUID() + "@example.test",
+                        passwordEncoder.encode("Password123!"),
+                        Role.COMPANY
+                )
+        );
+
+        mockMvc.perform(get("/api/v1/intern/profile/cv").with(asUser(companyUser)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

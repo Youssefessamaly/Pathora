@@ -401,6 +401,25 @@ export async function uploadInternCv(token: string, file: CvFileToUpload): Promi
   }
 }
 
+/**
+ * Downloads the authenticated intern's current profile CV to the app cache. The backend
+ * resolves the CV from the authenticated user, so no storage key or public file URL is ever
+ * exposed to the client. Callers can open/share the returned local file URI.
+ */
+export async function downloadInternCv(token: string): Promise<File> {
+  const url = `${getBaseUrl()}/intern/profile/cv`;
+  const destination = new File(Paths.cache, 'pathora-profile-cv.pdf');
+
+  try {
+    return await File.downloadFileAsync(url, destination, {
+      headers: { Authorization: `Bearer ${token}` },
+      idempotent: true,
+    });
+  } catch {
+    throw new NetworkError('Unable to download your CV. Please try again.');
+  }
+}
+
 export type CompanyProfile = {
   id: string;
   userId: string;
@@ -848,6 +867,7 @@ export type InternInternship = {
   totalRequiredSkillCount: number;
   matchedSkills: InternProfileSkill[];
   majorMatch: boolean;
+  favorited: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -867,6 +887,21 @@ export function getInternInternships(token: string, search?: string): Promise<In
 
 export function getInternInternship(token: string, internshipId: string): Promise<InternInternship> {
   return apiGet<InternInternship>(`/intern/internships/${internshipId}`, { token });
+}
+
+/** Saved internships, newest save first, using the same visibility/eligibility rules as the feed. */
+export function getFavoriteInternships(token: string): Promise<InternInternship[]> {
+  return apiGet<InternInternship[]>('/intern/favorites', { token });
+}
+
+/** Idempotently saves an internship for the authenticated intern. */
+export function favoriteInternship(token: string, internshipId: string): Promise<void> {
+  return apiPost<void>(`/intern/favorites/${internshipId}`, undefined, { token });
+}
+
+/** Idempotently removes an internship from the authenticated intern's saved list. */
+export function unfavoriteInternship(token: string, internshipId: string): Promise<void> {
+  return apiDelete<void>(`/intern/favorites/${internshipId}`, { token });
 }
 
 export type InternApplicationStatus = 'APPLIED' | 'ACCEPTED' | 'REJECTED';

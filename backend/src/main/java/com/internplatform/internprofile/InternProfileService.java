@@ -56,6 +56,18 @@ public class InternProfileService {
         return toResponse(profile);
     }
 
+    @Transactional(readOnly = true)
+    public CvDownload getCv(UUID userId) {
+        InternProfile profile = findProfileOrThrow(userId);
+
+        if (profile.getCvStorageKey() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "CV not found");
+        }
+
+        byte[] bytes = cvStorageService.read(profile.getCvStorageKey());
+        return new CvDownload(bytes, profile.getCvOriginalFilename(), profile.getCvContentType());
+    }
+
     public List<SkillResponse> getSkillCatalog() {
         return skillRepository.findAllByOrderByNameAsc().stream()
                 .map(skill -> new SkillResponse(skill.getId(), skill.getName()))
@@ -386,5 +398,8 @@ public class InternProfileService {
             InternProfileResponse profile,
             List<String> missingFields
     ) {
+    }
+
+    public record CvDownload(byte[] bytes, String fileName, String contentType) {
     }
 }

@@ -1,6 +1,6 @@
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InternshipFeedCard } from '@/components/internship-feed-card';
@@ -11,11 +11,13 @@ import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/co
 import { useAuth } from '@/context/auth-context';
 import {
   ApiError,
+  favoriteInternship,
   getInternApplications,
   getInternInternships,
   getInternProfileOrNull,
   type InternInternship,
   type InternProfile,
+  unfavoriteInternship,
 } from '@/lib/api';
 import { initialsFor } from '@/lib/initials';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
@@ -65,6 +67,7 @@ function InternHomeScreen() {
   const [applicationsCount, setApplicationsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [updatingFavoriteIds, setUpdatingFavoriteIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!token) {
@@ -122,9 +125,39 @@ function InternHomeScreen() {
     router.push(nextStep ?? '/intern/profile');
   };
 
+  const handleFavoritePress = async (internship: InternInternship) => {
+    if (!token || updatingFavoriteIds.has(internship.id)) {
+      return;
+    }
+
+    setUpdatingFavoriteIds((current) => new Set(current).add(internship.id));
+    try {
+      if (internship.favorited) {
+        await unfavoriteInternship(token, internship.id);
+      } else {
+        await favoriteInternship(token, internship.id);
+      }
+
+      setInternships((current) =>
+        current?.map((item) =>
+          item.id === internship.id ? { ...item, favorited: !internship.favorited } : item,
+        ) ?? null,
+      );
+    } catch {
+      Alert.alert('Unable to update favorite', 'Please try again.');
+    } finally {
+      setUpdatingFavoriteIds((current) => {
+        const next = new Set(current);
+        next.delete(internship.id);
+        return next;
+      });
+    }
+  };
+
   const greeting = greetingForHour(new Date().getHours());
   const firstName = profile?.firstName?.trim();
   const strength = profile ? calculateProfileStrength(profile) : null;
+  const savedCount = internships?.filter((internship) => internship.favorited).length ?? 0;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -180,9 +213,12 @@ function InternHomeScreen() {
               active
               onPress={() => router.push('/intern/applications')}
             />
-            {/* Saved internships have no backend yet — shown muted/non-interactive so the
-                layout matches the design without claiming the feature exists. */}
-            <StatCard label="Saved" value={0} active={false} />
+            <StatCard
+              label="Saved"
+              value={savedCount}
+              active
+              onPress={() => router.push('/intern/favorites')}
+            />
             {/* No INTERVIEW application status exists yet — always 0, never derived from
                 ACCEPTED. */}
             <StatCard label="Interviews" value={0} active={false} />
@@ -212,6 +248,8 @@ function InternHomeScreen() {
                 onPress={() =>
                   router.push({ pathname: '/intern/internships/[id]', params: { id: internship.id } })
                 }
+                onFavoritePress={() => handleFavoritePress(internship)}
+                favoriteDisabled={updatingFavoriteIds.has(internship.id)}
               />
             ))
           )}

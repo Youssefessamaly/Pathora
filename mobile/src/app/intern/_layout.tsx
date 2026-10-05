@@ -86,6 +86,18 @@ export default function InternTabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="favorites"
+          options={{
+            title: 'Favorites',
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                focused={focused}
+                name={{ ios: 'bookmark.fill', android: 'bookmark', web: 'bookmark' }}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="applications"
           options={{
             title: 'Applications',
@@ -107,6 +119,13 @@ export default function InternTabsLayout() {
                 name={{ ios: 'person.crop.circle.fill', android: 'account_circle', web: 'account_circle' }}
               />
             ),
+          }}
+        />
+        <Tabs.Screen
+          name="cv-preview"
+          options={{
+            href: null,
+            tabBarStyle: { display: 'none' },
           }}
         />
       </Tabs>

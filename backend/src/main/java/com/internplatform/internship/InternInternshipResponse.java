@@ -26,6 +26,7 @@ public record InternInternshipResponse(
         int totalRequiredSkillCount,
         List<InternshipSkillResponse> matchedSkills,
         boolean majorMatch,
+        boolean favorited,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

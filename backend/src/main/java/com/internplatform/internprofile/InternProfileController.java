@@ -1,7 +1,10 @@
 package com.internplatform.internprofile;
 
 import jakarta.validation.Valid;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -71,6 +75,29 @@ public class InternProfileController {
             @RequestParam("file") MultipartFile file
     ) {
         return internProfileService.uploadCv(currentUserId(jwt), file);
+    }
+
+    @GetMapping("/profile/cv")
+    public ResponseEntity<byte[]> downloadCv(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        InternProfileService.CvDownload cv = internProfileService.getCv(currentUserId(jwt));
+
+        MediaType contentType;
+        try {
+            contentType = MediaType.parseMediaType(cv.contentType());
+        } catch (Exception exception) {
+            contentType = MediaType.APPLICATION_PDF;
+        }
+
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(cv.fileName() != null ? cv.fileName() : "cv.pdf", StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(contentType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(cv.bytes());
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

@@ -2,7 +2,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { PathoraButton } from '@/components/pathora-button';
 import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
@@ -63,6 +62,17 @@ function ProfileScreen() {
 
   const handleEditProfile = () => {
     router.push('/onboarding/personal');
+  };
+
+  const handleViewCv = () => {
+    if (!profile?.cvFileName) {
+      return;
+    }
+
+    router.push({
+      pathname: '/intern/cv-preview',
+      params: { fileName: profile.cvFileName },
+    });
   };
 
   if (isLoading) {
@@ -154,6 +164,14 @@ function ProfileScreen() {
         <View style={styles.card}>
           <SectionLabel label="CV" />
           <Text style={styles.cardLine}>{profile.cvFileName ?? 'No CV uploaded yet'}</Text>
+          {profile.cvFileName && (
+            <PathoraButton
+              label="View CV"
+              variant="secondary"
+              onPress={handleViewCv}
+              style={styles.cvButton}
+            />
+          )}
         </View>
 
         {profile.linkedinUrl && (
@@ -302,6 +320,9 @@ const styles = StyleSheet.create({
     fontFamily: PathoraFonts.en.semiBold,
     fontSize: 12,
     color: PathoraColors.textTertiary,
+  },
+  cvButton: {
+    marginTop: PathoraSpacing[8],
   },
   signOutButton: {
     marginTop: PathoraSpacing[8],

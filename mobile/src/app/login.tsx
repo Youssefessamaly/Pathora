@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,9 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { registered } = useLocalSearchParams<{
+    registered?: 'student' | 'company';
+  }>();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,6 +28,12 @@ export default function LoginScreen() {
   const isEmailValid = EMAIL_PATTERN.test(email);
   const isPasswordValid = password.length > 0;
   const canSubmit = isEmailValid && isPasswordValid;
+  let registrationMessage: string | null = null;
+  if (registered === 'company') {
+    registrationMessage = 'Company account created successfully. Log in to continue.';
+  } else if (registered === 'student') {
+    registrationMessage = 'Student account created successfully. Log in to continue.';
+  }
 
   const handleForgotPassword = () => {
     router.push('/forgot-password');
@@ -47,10 +56,6 @@ export default function LoginScreen() {
           if (!token) {
             throw new Error('Missing access token after sign-in');
           }
-          // Crossing the auth boundary: pop Welcome/AccountType/Login (and anything else
-          // still sitting in the stack below this point) back to the root before replacing
-          // it, so hardware Back from the authenticated app can never reveal Login again.
-          router.dismissAll();
           router.replace(await resolveInternPostAuthRoute(token));
         } catch {
           // Signed in, but couldn't determine onboarding status (e.g. network hiccup) —
@@ -67,8 +72,6 @@ export default function LoginScreen() {
           if (!token) {
             throw new Error('Missing access token after sign-in');
           }
-          // Same auth-boundary hardening as the INTERN branch above.
-          router.dismissAll();
           router.replace(await resolveCompanyPostAuthRoute(token));
         } catch {
           // Signed in, but couldn't determine onboarding/approval status (e.g. network
@@ -104,6 +107,8 @@ export default function LoginScreen() {
 
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subtitle}>Log in to keep tracking your applications.</Text>
+
+        {registrationMessage && <Text style={styles.successMessage}>{registrationMessage}</Text>}
 
         <View style={styles.fields}>
           <PathoraInput
@@ -184,6 +189,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: PathoraColors.textSecondary,
     marginBottom: PathoraSpacing[32],
+  },
+  successMessage: {
+    fontFamily: PathoraFonts.en.medium,
+    fontSize: 13,
+    lineHeight: 19,
+    color: PathoraColors.teal600,
+    marginTop: -PathoraSpacing[16],
+    marginBottom: PathoraSpacing[24],
   },
   fields: {
     gap: PathoraSpacing[20],

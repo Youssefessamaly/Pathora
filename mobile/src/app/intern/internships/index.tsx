@@ -1,6 +1,6 @@
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InternshipFeedCard } from '@/components/internship-feed-card';
@@ -9,7 +9,14 @@ import { PathoraSearchInput } from '@/components/pathora-search-input';
 import { PathoraColors, PathoraFonts, PathoraSpacing } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { ApiError, getInternInternships, getInternProfileOrNull, type InternInternship } from '@/lib/api';
+import {
+  ApiError,
+  favoriteInternship,
+  getInternInternships,
+  getInternProfileOrNull,
+  type InternInternship,
+  unfavoriteInternship,
+} from '@/lib/api';
 import { describeOnboardingError, resolveFirstIncompleteOnboardingStep } from '@/lib/onboarding';
 
 const SEARCH_DEBOUNCE_MS = 350;
@@ -35,6 +42,7 @@ function InternshipsListScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [updatingFavoriteIds, setUpdatingFavoriteIds] = useState<Set<string>>(new Set());
   const hasLoadedOnce = useRef(false);
 
   const load = useCallback(
@@ -83,6 +91,35 @@ function InternshipsListScreen() {
     setRefreshing(true);
     await load(debouncedQuery);
     setRefreshing(false);
+  };
+
+  const handleFavoritePress = async (internship: InternInternship) => {
+    if (!token || updatingFavoriteIds.has(internship.id)) {
+      return;
+    }
+
+    setUpdatingFavoriteIds((current) => new Set(current).add(internship.id));
+    try {
+      if (internship.favorited) {
+        await unfavoriteInternship(token, internship.id);
+      } else {
+        await favoriteInternship(token, internship.id);
+      }
+
+      setInternships((current) =>
+        current?.map((item) =>
+          item.id === internship.id ? { ...item, favorited: !internship.favorited } : item,
+        ) ?? null,
+      );
+    } catch {
+      Alert.alert('Unable to update favorite', 'Please try again.');
+    } finally {
+      setUpdatingFavoriteIds((current) => {
+        const next = new Set(current);
+        next.delete(internship.id);
+        return next;
+      });
+    }
   };
 
   return (
@@ -149,6 +186,8 @@ function InternshipsListScreen() {
               onPress={() =>
                 router.push({ pathname: '/intern/internships/[id]', params: { id: internship.id } })
               }
+              onFavoritePress={() => handleFavoritePress(internship)}
+              favoriteDisabled={updatingFavoriteIds.has(internship.id)}
             />
           ))}
         </ScrollView>
