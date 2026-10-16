@@ -1,10 +1,10 @@
 import { Tabs, useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { PathoraButton } from '@/components/pathora-button';
-import { PathoraColors, PathoraFonts } from '@/constants/pathora-theme';
+import { CompanyLiquidTabBar } from '@/components/company-liquid-tab-bar';
+import { PathoraColors } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
 import { resolveCompanyPostAuthRoute } from '@/lib/onboarding';
 
@@ -100,70 +100,16 @@ function CompanyTabsGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function TabIcon({ focused, name }: { focused: boolean; name: SymbolViewProps['name'] }) {
-  return <SymbolView name={name} size={22} tintColor={focused ? PathoraColors.teal600 : PathoraColors.textTertiary} />;
-}
-
 export default function CompanyTabsLayout() {
   return (
     <CompanyTabsGuard>
       <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: PathoraColors.teal600,
-          tabBarInactiveTintColor: PathoraColors.textTertiary,
-          tabBarStyle: {
-            backgroundColor: PathoraColors.surface,
-            borderTopWidth: 1,
-            borderTopColor: PathoraColors.border,
-            height: 58,
-            paddingTop: 6,
-            paddingBottom: 6,
-          },
-          tabBarLabelStyle: {
-            fontFamily: PathoraFonts.en.semiBold,
-            fontSize: 11,
-          },
-        }}>
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Dashboard',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name={{ ios: 'house.fill', android: 'home', web: 'home' }} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="internships"
-          options={{
-            title: 'Internships',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name={{ ios: 'briefcase.fill', android: 'work', web: 'work' }} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="applicants"
-          options={{
-            title: 'Applicants',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon
-                focused={focused}
-                name={{ ios: 'list.clipboard.fill', android: 'assignment', web: 'assignment' }}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Company',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name={{ ios: 'building.2.fill', android: 'apartment', web: 'apartment' }} />
-            ),
-          }}
-        />
+        tabBar={(props) => <CompanyLiquidTabBar {...props} />}
+        screenOptions={{ headerShown: false }}>
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="internships" options={{ title: 'Internships' }} />
+        <Tabs.Screen name="applicants" options={{ title: 'Applicants' }} />
+        <Tabs.Screen name="profile" options={{ title: 'Company' }} />
       </Tabs>
     </CompanyTabsGuard>
   );

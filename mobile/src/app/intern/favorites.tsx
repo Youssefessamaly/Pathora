@@ -78,7 +78,7 @@ function FavoritesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <Text style={styles.title}>Favorites</Text>
       <Text style={styles.subtitle}>Internships you saved for later.</Text>
 
@@ -180,6 +180,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: PathoraSpacing[24],
     gap: PathoraSpacing[8],
+    paddingBottom: 130,
   },
   emptyTitle: {
     fontFamily: PathoraFonts.en.extraBold,
@@ -201,6 +202,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: PathoraSpacing[24],
-    paddingBottom: PathoraSpacing[24],
+    paddingBottom: 130,
   },
 });

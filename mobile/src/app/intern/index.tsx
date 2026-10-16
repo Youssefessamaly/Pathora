@@ -160,7 +160,7 @@ function InternHomeScreen() {
   const savedCount = internships?.filter((internship) => internship.favorited).length ?? 0;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       {internships === null && !error && (
         <View style={styles.centerContent}>
           <ActivityIndicator color={PathoraColors.teal600} />
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: PathoraSpacing[24],
     paddingTop: 8,
-    paddingBottom: PathoraSpacing[32],
+    paddingBottom: 130,
     gap: PathoraSpacing[20],
   },
   headerRow: {

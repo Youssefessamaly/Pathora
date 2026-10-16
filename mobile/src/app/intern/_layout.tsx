@@ -1,9 +1,9 @@
 import { Tabs, useRouter } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useEffect, type ReactNode } from 'react';
 import { View } from 'react-native';
 
-import { PathoraColors, PathoraFonts } from '@/constants/pathora-theme';
+import { InternLiquidTabBar } from '@/components/intern-liquid-tab-bar';
+import { PathoraColors } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
 
 /**
@@ -42,91 +42,20 @@ function InternTabsGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function TabIcon({ focused, name }: { focused: boolean; name: SymbolViewProps['name'] }) {
-  return <SymbolView name={name} size={22} tintColor={focused ? PathoraColors.teal600 : PathoraColors.textTertiary} />;
-}
-
 export default function InternTabsLayout() {
   return (
     <InternTabsGuard>
       <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: PathoraColors.teal600,
-          tabBarInactiveTintColor: PathoraColors.textTertiary,
-          tabBarStyle: {
-            backgroundColor: PathoraColors.surface,
-            borderTopWidth: 1,
-            borderTopColor: PathoraColors.border,
-            height: 58,
-            paddingTop: 6,
-            paddingBottom: 6,
-          },
-          tabBarLabelStyle: {
-            fontFamily: PathoraFonts.en.semiBold,
-            fontSize: 11,
-          },
-        }}>
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Home',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name={{ ios: 'house.fill', android: 'home', web: 'home' }} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="internships"
-          options={{
-            title: 'Internships',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon focused={focused} name={{ ios: 'briefcase.fill', android: 'work', web: 'work' }} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="favorites"
-          options={{
-            title: 'Favorites',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon
-                focused={focused}
-                name={{ ios: 'bookmark.fill', android: 'bookmark', web: 'bookmark' }}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="applications"
-          options={{
-            title: 'Applications',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon
-                focused={focused}
-                name={{ ios: 'doc.text.fill', android: 'description', web: 'description' }}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ focused }) => (
-              <TabIcon
-                focused={focused}
-                name={{ ios: 'person.crop.circle.fill', android: 'account_circle', web: 'account_circle' }}
-              />
-            ),
-          }}
-        />
+        tabBar={(props) => <InternLiquidTabBar {...props} />}
+        screenOptions={{ headerShown: false }}>
+        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="internships" options={{ title: 'Internships' }} />
+        <Tabs.Screen name="favorites" options={{ title: 'Favorites' }} />
+        <Tabs.Screen name="applications" options={{ title: 'Applications' }} />
+        <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
         <Tabs.Screen
           name="cv-preview"
-          options={{
-            href: null,
-            tabBarStyle: { display: 'none' },
-          }}
+          options={{ href: null, tabBarStyle: { display: 'none' } }}
         />
       </Tabs>
     </InternTabsGuard>

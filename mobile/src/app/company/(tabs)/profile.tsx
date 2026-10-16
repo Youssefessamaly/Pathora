@@ -86,7 +86,7 @@ function CompanyProfileScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerContent}>
           <ActivityIndicator color={PathoraColors.teal600} />
         </View>
@@ -96,7 +96,7 @@ function CompanyProfileScreen() {
 
   if (error || !profile) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>{error ?? 'Unable to load your company profile.'}</Text>
           <PathoraButton label="Try again" variant="secondary" onPress={load} style={styles.retryButton} />
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: PathoraSpacing[24],
-    paddingBottom: PathoraSpacing[32],
+    paddingBottom: 130,
   },
   identityRow: {
     flexDirection: 'row',

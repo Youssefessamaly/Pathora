@@ -77,7 +77,7 @@ function ProfileScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerContent}>
           <ActivityIndicator color={PathoraColors.teal600} />
         </View>
@@ -87,7 +87,7 @@ function ProfileScreen() {
 
   if (error || !profile) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>{error ?? 'Unable to load your profile.'}</Text>
           <PathoraButton label="Try again" variant="secondary" onPress={load} style={styles.retryButton} />
@@ -99,7 +99,7 @@ function ProfileScreen() {
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <View style={styles.avatar}>
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: PathoraSpacing[24],
     paddingTop: 8,
-    paddingBottom: PathoraSpacing[32],
+    paddingBottom: 130,
   },
   centerContent: {
     flex: 1,
