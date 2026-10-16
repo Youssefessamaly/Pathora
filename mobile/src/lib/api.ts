@@ -4,7 +4,7 @@
  */
 
 import { File, Paths } from 'expo-file-system';
-import { fetch as expoFetch } from 'expo/fetch';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -357,47 +357,111 @@ export type CvFileToUpload = {
  * current networking stack. Content-Type is intentionally left unset so the multipart
  * boundary is generated automatically.
  */
-export async function uploadInternCv(token: string, file: CvFileToUpload): Promise<CvUploadResponse> {
+export async function uploadInternCv(
+  token: string,
+  file: CvFileToUpload,
+): Promise<CvUploadResponse> {
   const url = `${getBaseUrl()}/intern/profile/cv`;
-  const selectedFile = new File(file.uri);
 
-  const formData = new FormData();
-  formData.append('file', selectedFile);
+  const cacheRoot = LegacyFileSystem.cacheDirectory;
 
-  let response: Awaited<ReturnType<typeof expoFetch>>;
-  try {
-    response = await expoFetch(url, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-  } catch {
-    throw new NetworkError();
+  if (!cacheRoot) {
+    throw new NetworkError('Unable to prepare the CV for upload.');
   }
 
-  if (!response.ok) {
-    let errorBody: unknown;
+  const uploadDirectory = `${cacheRoot}pathora-cv-uploads/`;
+
+  const safeFileName =
+    file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'cv.pdf';
+
+  const stagedUri =
+    `${uploadDirectory}${Date.now()}-${safeFileName}`;
+
+  let response: LegacyFileSystem.FileSystemUploadResult;
+
+  try {
+    // Make sure our own app-controlled upload directory exists.
+    await LegacyFileSystem.makeDirectoryAsync(uploadDirectory, {
+      intermediates: true,
+    });
+
+    // Copy the document-provider URI into a location that FileSystem
+    // definitely owns and can read.
+    await LegacyFileSystem.copyAsync({
+      from: file.uri,
+      to: stagedUri,
+    });
+
+    // Defensive check before trying the network request.
+    const stagedFileInfo =
+      await LegacyFileSystem.getInfoAsync(stagedUri);
+
+    if (!stagedFileInfo.exists) {
+      throw new Error('The staged CV file could not be created.');
+    }
+
+    response = await LegacyFileSystem.uploadAsync(
+      url,
+      stagedUri,
+      {
+        httpMethod: 'POST',
+        uploadType:
+          LegacyFileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType: file.mimeType || 'application/pdf',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+  } catch (error) {
+    console.error('CV staging/upload failed:', error);
+    throw new NetworkError();
+  } finally {
+    // The backend now owns its copy, so don't leave temporary PDFs
+    // accumulating in the phone's cache.
     try {
-      const errorText = await response.text();
-      errorBody = errorText ? JSON.parse(errorText) : undefined;
+      await LegacyFileSystem.deleteAsync(stagedUri, {
+        idempotent: true,
+      });
+    } catch {
+      // Cache cleanup failure should never fail the upload itself.
+    }
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    let errorBody: unknown;
+
+    try {
+      errorBody = response.body
+        ? JSON.parse(response.body)
+        : undefined;
     } catch {
       errorBody = undefined;
     }
-    throw new ApiError(response.status, friendlyMessageForStatus(response.status), errorBody);
+
+    throw new ApiError(
+      response.status,
+      friendlyMessageForStatus(response.status),
+      errorBody,
+    );
   }
 
-  const text = await response.text();
-  if (!text) {
-    return undefined as unknown as CvUploadResponse;
+  if (!response.body) {
+    throw new ApiError(
+      response.status,
+      'Received an unexpected response from the server.',
+    );
   }
 
   try {
-    return JSON.parse(text) as CvUploadResponse;
+    return JSON.parse(response.body) as CvUploadResponse;
   } catch {
-    throw new ApiError(response.status, 'Received an unexpected response from the server.');
+    throw new ApiError(
+      response.status,
+      'Received an unexpected response from the server.',
+    );
   }
 }
 

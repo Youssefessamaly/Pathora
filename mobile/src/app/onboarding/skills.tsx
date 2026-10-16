@@ -104,7 +104,7 @@ function SkillsAndInterestsScreen() {
       result = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
         multiple: false,
-        copyToCacheDirectory: true,
+        copyToCacheDirectory: Platform.OS !== 'android',
       });
     } catch {
       setCvError('Could not open the file picker. Please try again.');
