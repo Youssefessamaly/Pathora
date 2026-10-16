@@ -7,7 +7,6 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import {
   ActivityIndicator,
@@ -355,35 +354,6 @@ export default function CompanyInternshipsListRoute() {
           </View>
         ) : (
           <>
-            <LinearGradient
-              colors={[PathoraColors.teal700, PathoraColors.teal600, PathoraColors.ink900]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.hero}>
-              <View pointerEvents="none" style={styles.heroHalo} />
-              <View pointerEvents="none" style={styles.heroHaloSmall} />
-              <View style={styles.heroEyebrowLine}>
-                <View style={styles.heroDot} />
-                <Text style={styles.heroEyebrow}>YOUR HIRING SPACE</Text>
-              </View>
-              <Text style={styles.heroTitle}>
-                {openCount > 0 ? `${openCount} ${openCount === 1 ? 'role is' : 'roles are'} live.` : 'Great talent starts here.'}
-              </Text>
-              <Text style={styles.heroBody}>
-                {openCount > 0
-                  ? 'Give promising students their next opportunity.'
-                  : 'Create an internship and start connecting with future talent.'}
-              </Text>
-              <Pressable
-                onPress={createRole}
-                accessibilityRole="button"
-                accessibilityLabel="Post a new internship"
-                style={({ pressed }) => [styles.heroCta, pressed && styles.ctaPressed]}>
-                <Text style={styles.heroCtaText}>Post an internship</Text>
-                <SmallIcon name={{ ios: 'arrow.up.right', android: 'north_east', web: 'north_east' }} color={PathoraColors.teal700} size={17} />
-              </Pressable>
-            </LinearGradient>
-
             <View style={styles.overviewSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionEyebrow}>AT A GLANCE</Text>
@@ -499,31 +469,6 @@ const styles = StyleSheet.create({
   },
   loadingPanel: { flex: 1, minHeight: 330, gap: 14, justifyContent: 'center', alignItems: 'center' },
   loadingCaption: { color: PathoraColors.textSecondary, fontFamily: PathoraFonts.en.medium, fontSize: 13 },
-  hero: {
-    paddingHorizontal: 23, paddingVertical: 24, minHeight: 216,
-    borderRadius: PathoraRadius[20], gap: 13, overflow: 'hidden',
-    justifyContent: 'center',
-    shadowColor: PathoraColors.teal700, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 17, elevation: 3,
-  },
-  heroHalo: {
-    position: 'absolute', right: -78, top: -106, width: 245, height: 245, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.17)', backgroundColor: 'rgba(255,255,255,0.045)',
-  },
-  heroHaloSmall: {
-    position: 'absolute', right: -30, bottom: -67, width: 146, height: 146, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
-  },
-  heroEyebrowLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: PathoraColors.amber500 },
-  heroEyebrow: { fontFamily: PathoraFonts.en.bold, fontSize: 9.5, letterSpacing: 1.45, color: '#E4F4EF' },
-  heroTitle: { color: '#FFFFFF', fontSize: 25, lineHeight: 33, letterSpacing: -0.65, fontFamily: PathoraFonts.en.extraBold, maxWidth: '90%' },
-  heroBody: { color: '#E1F2EF', fontFamily: PathoraFonts.en.medium, fontSize: 12.5, lineHeight: 19, maxWidth: '88%' },
-  heroCta: {
-    alignSelf: 'flex-start', paddingHorizontal: 17, paddingVertical: 13, marginTop: 3,
-    flexDirection: 'row', gap: 15, alignItems: 'center', borderRadius: 13, backgroundColor: '#FFFFFF',
-  },
-  heroCtaText: { color: PathoraColors.teal700, fontFamily: PathoraFonts.en.bold, fontSize: 12.5 },
-  ctaPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   overviewSection: { gap: PathoraSpacing[16] },
   sectionHeader: { gap: 3 },
   sectionEyebrow: { fontFamily: PathoraFonts.en.bold, fontSize: 10, letterSpacing: 1.5, color: PathoraColors.teal600 },

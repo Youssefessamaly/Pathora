@@ -1,5 +1,4 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -275,7 +274,7 @@ function CompanyHomeScreen() {
 
   const goToApplicantDetail = (application: CompanyApplicantEntry) => {
     router.push({
-      pathname: '/company/internships/[id]/applicants/[applicationId]',
+      pathname: '/company/applicants/[applicationId]',
       params: { id: application.internshipId, applicationId: application.applicationId },
     });
   };
@@ -296,7 +295,7 @@ function CompanyHomeScreen() {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.centerContent}>
-          <Text style={styles.errorTitle}>We couldn't load your dashboard</Text>
+          <Text style={styles.errorTitle}>We could not load your dashboard</Text>
           <Text style={styles.errorText}>{error}</Text>
           <PathoraButton label="Try again" variant="secondary" onPress={() => void load()} style={styles.retryButton} />
         </View>
@@ -340,33 +339,8 @@ function CompanyHomeScreen() {
         <View style={styles.welcomeBlock}>
           <Text style={styles.greeting}>GOOD TO SEE YOU</Text>
           <Text style={styles.companyName} numberOfLines={2}>{companyName}</Text>
-          <Text style={styles.welcomeSubtext}>Here's what's happening with your hiring.</Text>
+          <Text style={styles.welcomeSubtext}>Here is what is happening with your hiring.</Text>
         </View>
-
-        <LinearGradient
-          colors={[PathoraColors.teal700, PathoraColors.teal600, PathoraColors.ink900]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}>
-          <View pointerEvents="none" style={styles.heroCircleLarge} />
-          <View pointerEvents="none" style={styles.heroCircleSmall} />
-          <View style={styles.heroEyebrowWrap}>
-            <View style={styles.heroDot} />
-            <Text style={styles.heroEyebrow}>YOUR NEXT GREAT HIRE STARTS HERE</Text>
-          </View>
-          <Text style={styles.heroTitle}>Make room for{'\n'}new talent.</Text>
-          <Text style={styles.heroDescription}>
-            Share a new opportunity and connect with students ready to grow.
-          </Text>
-          <Pressable
-            onPress={() => router.push('/company/internships/new')}
-            accessibilityRole="button"
-            accessibilityLabel="Post an internship"
-            style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}>
-            <Text style={styles.heroButtonText}>+  Post an internship</Text>
-            <Text style={styles.heroButtonArrow}>↗</Text>
-          </Pressable>
-        </LinearGradient>
 
         <View style={styles.section}>
           <SectionHeading eyebrow="AT A GLANCE" title="Your hiring pulse" />
@@ -523,79 +497,6 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: PathoraColors.textSecondary,
   },
-  hero: {
-    overflow: 'hidden',
-    borderRadius: PathoraRadius[20],
-    paddingHorizontal: PathoraSpacing[24],
-    paddingVertical: PathoraSpacing[24],
-    gap: PathoraSpacing[12],
-    minHeight: 232,
-    justifyContent: 'center',
-    shadowColor: PathoraColors.teal700,
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  heroCircleLarge: {
-    position: 'absolute',
-    width: 214,
-    height: 214,
-    right: -86,
-    top: -92,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.17)',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.045)',
-  },
-  heroCircleSmall: {
-    position: 'absolute',
-    width: 118,
-    height: 118,
-    right: -44,
-    bottom: -57,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 999,
-  },
-  heroEyebrowWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heroDot: { width: 7, height: 7, borderRadius: 999, backgroundColor: PathoraColors.amber500 },
-  heroEyebrow: {
-    fontFamily: PathoraFonts.en.bold,
-    letterSpacing: 1.15,
-    fontSize: 9,
-    color: '#E2F4EF',
-  },
-  heroTitle: {
-    fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 25,
-    lineHeight: 32,
-    letterSpacing: -0.65,
-    color: PathoraColors.surface,
-  },
-  heroDescription: {
-    maxWidth: '90%',
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 12.5,
-    lineHeight: 19,
-    color: '#E3F3F0',
-  },
-  heroButton: {
-    alignSelf: 'flex-start',
-    marginTop: PathoraSpacing[8],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: PathoraSpacing[16],
-    backgroundColor: PathoraColors.surface,
-    paddingLeft: PathoraSpacing[16],
-    paddingRight: PathoraSpacing[12],
-    paddingVertical: PathoraSpacing[12],
-    borderRadius: PathoraRadius[12],
-    minHeight: 46,
-  },
-  heroButtonPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
-  heroButtonText: { color: PathoraColors.teal700, fontFamily: PathoraFonts.en.extraBold, fontSize: 12.5 },
-  heroButtonArrow: { color: PathoraColors.teal700, fontFamily: PathoraFonts.en.bold, fontSize: 17 },
   section: { gap: PathoraSpacing[12] },
   sectionHeading: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 },
   sectionHeadingText: { flex: 1, gap: 3 },
@@ -678,7 +579,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: PathoraSpacing[16],
     paddingVertical: PathoraSpacing[4],
   },
-  internshipRow: { flexDirection: 'row', alignItems: 'center', gap: PathoraSpacing[12], paddingVertical: PathoraSpacing[14] },
+  internshipRow: { flexDirection: 'row', alignItems: 'center', gap: PathoraSpacing[12], paddingVertical: PathoraSpacing[16] },
   roleIconBox: { width: 41, height: 41, borderRadius: PathoraRadius[12], backgroundColor: PathoraColors.teal100, alignItems: 'center', justifyContent: 'center' },
   internshipInfo: { flex: 1, gap: 3 },
   internshipTitle: { fontFamily: PathoraFonts.en.bold, fontSize: 14, color: PathoraColors.ink900 },

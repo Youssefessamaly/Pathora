@@ -1,94 +1,118 @@
-import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+/**
+ * Path · Company Profile — Phase 1 / Step 8
+ * Visual refresh only. Uses the existing company profile, approval API, edit-onboarding
+ * route and sign-out behavior. Keeps full-bleed content beneath floating tabs.
+ */
+import { useCallback, useState, type ReactNode } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CompanyApprovalBadge } from '@/components/company-approval-badge';
 import { PathoraButton } from '@/components/pathora-button';
-import { PathoraColors, PathoraFonts, PathoraRadius, PathoraSpacing } from '@/constants/pathora-theme';
+import { PathoraColors as C, PathoraFonts as F } from '@/constants/pathora-theme';
 import { useAuth } from '@/context/auth-context';
-import { getCompanyApprovalStatus, getCompanyProfileOrNull, type CompanyApprovalStatus, type CompanyProfile } from '@/lib/api';
+import {
+  getCompanyApprovalStatus,
+  getCompanyProfileOrNull,
+  type CompanyApprovalStatus,
+  type CompanyProfile,
+} from '@/lib/api';
 import { describeOnboardingError } from '@/lib/onboarding';
 
-function companyInitials(companyName: string | null | undefined, email: string | undefined): string {
-  const name = companyName?.trim();
-  if (!name) {
-    return (email?.trim()?.charAt(0) ?? '?').toUpperCase();
-  }
-  const words = name.split(/\s+/).filter(Boolean);
-  const letters = words.slice(0, 2).map((word) => word.charAt(0));
-  return (letters.join('') || '?').toUpperCase();
+type SymbolName = SymbolViewProps['name'];
+function Icon({ name, size = 18, color = C.teal700 }: {
+  name: SymbolName; size?: number; color?: string;
+}) {
+  return <SymbolView name={name} size={size} tintColor={color} />;
 }
 
-function InfoRow({ label, value, isLast }: { label: string; value: string; isLast: boolean }) {
+function SectionCard({ title, icon, children }: {
+  title: string; icon: SymbolName; children: ReactNode;
+}) {
   return (
-    <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue} numberOfLines={1}>
-        {value}
-      </Text>
+    <View style={styles.sectionCard}>
+      <View style={styles.accentLine} />
+      <View style={styles.cardHeading}>
+        <View style={styles.sectionIcon}><Icon name={icon} size={17} /></View>
+        <Text style={styles.cardTitle}>{title}</Text>
+      </View>
+      {children}
     </View>
   );
 }
 
-/**
- * The Company tab: the company's own profile, approval status, and account exit. Everything
- * shown is a real field from CompanyProfile/CompanyApprovalStatus — no HR multi-account
- * management or settings screen is built here, since the backend has no such model (single
- * User <-> CompanyProfile, no separate HR-accounts endpoint, no change-password endpoint) —
- * see the task's final report for this gap.
- */
-function CompanyProfileScreen() {
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoLine}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue} selectable>{value}</Text>
+    </View>
+  );
+}
+
+function companyInitials(name: string | null | undefined, email: string | undefined) {
+  const words = name?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (words.length === 0) return (email?.slice(0, 1) || '?').toUpperCase();
+  return words.slice(0, 2).map((word) => word.charAt(0)).join('').toUpperCase();
+}
+
+const APPROVAL_DESCRIPTIONS: Record<CompanyApprovalStatus, string> = {
+  APPROVED: 'Your company profile has been approved.',
+  PENDING: 'Your company profile is awaiting review.',
+  REJECTED: 'Your company profile was not approved.',
+};
+
+export default function CompanyProfileRoute() {
   const router = useRouter();
   const { user, token, signOut } = useAuth();
-
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
-  const [approvalStatus, setApprovalStatus] = useState<CompanyApprovalStatus | null>(null);
+  const [approval, setApproval] = useState<CompanyApprovalStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     try {
-      const [profileResult, approvalResult] = await Promise.all([
+      const [company, status] = await Promise.all([
         getCompanyProfileOrNull(token),
         getCompanyApprovalStatus(token),
       ]);
-      setProfile(profileResult);
-      setApprovalStatus(approvalResult.status);
+      setProfile(company);
+      setApproval(status.status);
       setError(null);
     } catch (loadError) {
       setError(describeOnboardingError(loadError));
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }, [token]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
-  const handleEditProfile = () => {
-    router.push('/company/onboarding/company');
-  };
-
-  const handleSignOut = async () => {
+  const editProfile = () => router.push('/company/onboarding/company');
+  const logOut = async () => {
     await signOut();
-    // Clear the entire authenticated stack along with the session so Back can never reopen
-    // a protected screen after logout.
     router.dismissAll();
     router.replace('/welcome');
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.centerContent}>
-          <ActivityIndicator color={PathoraColors.teal600} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={C.teal600} />
+          <Text style={styles.centerCaption}>Loading company details…</Text>
         </View>
       </SafeAreaView>
     );
@@ -97,206 +121,164 @@ function CompanyProfileScreen() {
   if (error || !profile) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.centerContent}>
+        <View style={styles.center}>
+          <Icon name={{ ios: 'wifi.exclamationmark', android: 'wifi_off', web: 'wifi_off' }} size={28} />
           <Text style={styles.errorText}>{error ?? 'Unable to load your company profile.'}</Text>
-          <PathoraButton label="Try again" variant="secondary" onPress={load} style={styles.retryButton} />
+          <PathoraButton label="Try again" onPress={() => void load()} style={styles.retry} />
         </View>
       </SafeAreaView>
     );
   }
 
-  const locationLine = [profile.industry, profile.location].filter(Boolean).join(' · ');
-
-  const contactRows: { label: string; value: string }[] = [];
-  if (profile.website) {
-    contactRows.push({ label: 'Website', value: profile.website });
-  }
-  if (profile.contactName) {
-    contactRows.push({ label: 'Contact person', value: profile.contactName });
-  }
-  if (user?.email) {
-    contactRows.push({ label: 'Contact email', value: user.email });
-  }
-  if (profile.contactPhone) {
-    contactRows.push({ label: 'Contact phone', value: profile.contactPhone });
-  }
+  const name = profile.companyName?.trim() || 'Your company';
+  const subtitle = [profile.industry, profile.location].filter(Boolean).join(' · ');
+  const companyFacts: { label: string; value: string }[] = [];
+  if (profile.industry) companyFacts.push({ label: 'Industry', value: profile.industry });
+  if (profile.companySize) companyFacts.push({ label: 'Company size', value: profile.companySize });
+  if (profile.location) companyFacts.push({ label: 'Location', value: profile.location });
+  const contactFacts: { label: string; value: string }[] = [];
+  if (profile.contactName) contactFacts.push({ label: 'Contact person', value: profile.contactName });
+  if (user?.email) contactFacts.push({ label: 'Account email', value: user.email });
+  if (profile.contactPhone) contactFacts.push({ label: 'Phone', value: profile.contactPhone });
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.banner} />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.identityRow}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>{companyInitials(profile.companyName, user?.email)}</Text>
-          </View>
-          <View style={styles.identityText}>
-            <Text style={styles.companyName} numberOfLines={1}>
-              {profile.companyName?.trim() || 'Your company'}
-            </Text>
-            {locationLine.length > 0 && (
-              <Text style={styles.locationLine} numberOfLines={1}>
-                {locationLine}
-              </Text>
-            )}
-          </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.pageHeader}>
+          <Text style={styles.eyebrow}>COMPANY WORKSPACE</Text>
+          <Text style={styles.pageTitle}>Company profile<Text style={styles.titleDot}>.</Text></Text>
+          <Text style={styles.subtitle}>Your team is present on Path.</Text>
         </View>
 
-        {approvalStatus && <CompanyApprovalBadge status={approvalStatus} />}
-
-        <PathoraButton
-          label="Edit profile"
-          variant="secondary"
-          onPress={handleEditProfile}
-          style={styles.editButton}
-        />
-
-        {profile.description && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>About</Text>
-            <Text style={styles.aboutText}>{profile.description}</Text>
+        <Animated.View entering={FadeInDown.duration(300).reduceMotion(ReduceMotion.System)} style={styles.identityCard}>
+          <View style={styles.identityTop}>
+            <LinearGradient
+              colors={[C.teal500, C.teal700]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.avatar}>
+              <Text style={styles.avatarText}>{companyInitials(profile.companyName, user?.email)}</Text>
+            </LinearGradient>
+            <View style={styles.identityContent}>
+              <Text style={styles.identityEyebrow}>COMPANY ACCOUNT</Text>
+              <Text style={styles.identityName}>{name}</Text>
+              {!!subtitle && <Text style={styles.identitySubtitle} numberOfLines={2}>{subtitle}</Text>}
+            </View>
           </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Contact</Text>
-          <View style={styles.card}>
-            {contactRows.map((row, index) => (
-              <InfoRow key={row.label} label={row.label} value={row.value} isLast={index === contactRows.length - 1} />
-            ))}
+          <View style={styles.identityFooter}>
+            <View style={styles.identityHint}>
+              <Icon name={{ ios: 'building.2', android: 'business', web: 'business' }} size={16} />
+              <Text style={styles.identityHintText}>Company details</Text>
+            </View>
+            <Pressable
+              onPress={editProfile}
+              accessibilityRole="button"
+              accessibilityLabel="Edit company profile"
+              style={({ pressed }) => [styles.editAction, pressed && styles.pressed]}>
+              <Icon name={{ ios: 'pencil', android: 'edit', web: 'edit' }} size={15} />
+              <Text style={styles.editText}>Edit profile</Text>
+            </Pressable>
           </View>
+        </Animated.View>
+
+        <SectionCard title="Verification status" icon={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }}>
+          <View style={styles.approvalRow}>
+            {approval ? <CompanyApprovalBadge status={approval} /> : <Text style={styles.muted}>Status unavailable</Text>}
+            {approval && <Text style={styles.approvalCopy}>{APPROVAL_DESCRIPTIONS[approval]}</Text>}
+          </View>
+        </SectionCard>
+
+        <View style={styles.sectionIntro}>
+          <Text style={styles.eyebrow}>YOUR ORGANIZATION</Text>
+          <Text style={styles.sectionIntroTitle}>The essentials</Text>
         </View>
 
-        <PathoraButton label="Log out" variant="secondary" onPress={handleSignOut} style={styles.signOutButton} />
+        <SectionCard title="About the company" icon={{ ios: 'building.2.fill', android: 'domain', web: 'domain' }}>
+          <Text style={styles.bodyText}>{profile.description?.trim() || 'Add a company description to introduce your team to future interns.'}</Text>
+        </SectionCard>
+
+        <SectionCard title="Company information" icon={{ ios: 'info.circle.fill', android: 'info', web: 'info' }}>
+          {companyFacts.length > 0 ? (
+            <View style={styles.facts}>
+              {companyFacts.map((fact) => <InfoLine key={fact.label} label={fact.label} value={fact.value} />)}
+            </View>
+          ) : (
+            <Text style={styles.muted}>Your company information has not been added yet.</Text>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Contact details" icon={{ ios: 'person.crop.circle', android: 'contact_mail', web: 'contact_mail' }}>
+          {contactFacts.length > 0 ? (
+            <View style={styles.facts}>
+              {contactFacts.map((fact) => <InfoLine key={fact.label} label={fact.label} value={fact.value} />)}
+            </View>
+          ) : <Text style={styles.muted}>No contact details added yet.</Text>}
+          {profile.website && (
+            <View style={styles.websiteBlock}>
+              <Text style={styles.microLabel}>WEBSITE</Text>
+              <Text style={styles.websiteValue} selectable>{profile.website}</Text>
+            </View>
+          )}
+        </SectionCard>
+
+        <Pressable
+          onPress={() => void logOut()}
+          accessibilityRole="button"
+          accessibilityLabel="Log out of your company account"
+          style={({ pressed }) => [styles.logoutAction, pressed && styles.pressed]}>
+          <Icon name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }} size={19} color={C.error} />
+          <Text style={styles.logoutText}>Log out</Text>
+        </Pressable>
+        <Text style={styles.footer}>Your next great hire starts with Path.</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-export default function CompanyProfileRoute() {
-  return <CompanyProfileScreen />;
-}
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: PathoraColors.paper,
-  },
-  centerContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: PathoraSpacing[24],
-    gap: PathoraSpacing[16],
-  },
-  errorText: {
-    fontFamily: PathoraFonts.en.medium,
-    fontSize: 14,
-    color: PathoraColors.error,
-    textAlign: 'center',
-  },
-  retryButton: {
-    minWidth: 140,
-  },
-  banner: {
-    height: 96,
-    backgroundColor: PathoraColors.teal700,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: PathoraSpacing[24],
-    paddingBottom: 130,
-  },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: PathoraSpacing[12],
-    marginTop: -30,
-    marginBottom: PathoraSpacing[16],
-  },
-  logo: {
-    width: 58,
-    height: 58,
-    borderRadius: PathoraRadius[14],
-    backgroundColor: PathoraColors.teal100,
-    borderWidth: 3,
-    borderColor: PathoraColors.paper,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 19,
-    color: PathoraColors.teal700,
-  },
-  identityText: {
-    flex: 1,
-    paddingBottom: 4,
-    gap: 2,
-  },
-  companyName: {
-    fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 18,
-    color: PathoraColors.ink900,
-  },
-  locationLine: {
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 12.5,
-    color: PathoraColors.textSecondary,
-  },
-  editButton: {
-    alignSelf: 'flex-start',
-    marginTop: PathoraSpacing[16],
-    marginBottom: PathoraSpacing[8],
-  },
-  section: {
-    marginTop: PathoraSpacing[20],
-    gap: PathoraSpacing[8],
-  },
-  sectionLabel: {
-    fontFamily: PathoraFonts.en.bold,
-    fontSize: 13,
-    color: PathoraColors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  aboutText: {
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 13.5,
-    lineHeight: 20,
-    color: PathoraColors.textSecondary,
-  },
-  card: {
-    borderRadius: PathoraRadius[14],
-    backgroundColor: PathoraColors.surface,
-    borderWidth: 1,
-    borderColor: PathoraColors.border,
-    paddingHorizontal: PathoraSpacing[16],
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: PathoraSpacing[12],
-    paddingVertical: PathoraSpacing[12],
-    borderBottomWidth: 1,
-    borderBottomColor: PathoraColors.border,
-  },
-  infoRowLast: {
-    borderBottomWidth: 0,
-  },
-  infoLabel: {
-    fontFamily: PathoraFonts.en.regular,
-    fontSize: 13,
-    color: PathoraColors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    textAlign: 'right',
-    fontFamily: PathoraFonts.en.semiBold,
-    fontSize: 13,
-    color: PathoraColors.ink900,
-  },
-  signOutButton: {
-    marginTop: PathoraSpacing[24],
-  },
+  safeArea: { flex: 1, backgroundColor: C.paper },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 144, gap: 18 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 26, gap: 16 },
+  centerCaption: { fontFamily: F.en.medium, color: C.textSecondary, fontSize: 13 },
+  errorText: { color: C.error, fontFamily: F.en.medium, textAlign: 'center', fontSize: 14 },
+  retry: { maxWidth: 220 },
+  pressed: { opacity: 0.76, transform: [{ scale: 0.99 }] },
+  pageHeader: { gap: 5 },
+  eyebrow: { fontFamily: F.en.bold, color: C.teal600, fontSize: 10, letterSpacing: 1.8 },
+  pageTitle: { fontFamily: F.en.extraBold, color: C.ink900, fontSize: 30, lineHeight: 39, letterSpacing: -0.85 },
+  titleDot: { color: C.teal500 },
+  subtitle: { fontFamily: F.en.medium, color: C.textSecondary, fontSize: 12.5, lineHeight: 19 },
+  identityCard: { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.border, padding: 18, gap: 17 },
+  identityTop: { flexDirection: 'row', gap: 14, alignItems: 'center' },
+  avatar: { width: 66, height: 66, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontFamily: F.en.extraBold, color: C.surface, fontSize: 23 },
+  identityContent: { flex: 1, minWidth: 0, gap: 4 },
+  identityEyebrow: { fontFamily: F.en.bold, color: C.teal600, fontSize: 9.5, letterSpacing: 1.15 },
+  identityName: { fontFamily: F.en.extraBold, color: C.ink900, fontSize: 20, lineHeight: 26 },
+  identitySubtitle: { fontFamily: F.en.medium, fontSize: 12, lineHeight: 18, color: C.textSecondary },
+  identityFooter: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  identityHint: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  identityHintText: { fontFamily: F.en.medium, color: C.textSecondary, fontSize: 11 },
+  editAction: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.teal100, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 11 },
+  editText: { fontFamily: F.en.bold, color: C.teal700, fontSize: 12 },
+  sectionCard: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, padding: 18, borderRadius: 19, gap: 12 },
+  accentLine: { width: 25, height: 4, borderRadius: 99, backgroundColor: C.teal500 },
+  cardHeading: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  sectionIcon: { height: 30, width: 30, borderRadius: 10, backgroundColor: C.teal100, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontFamily: F.en.bold, color: C.ink900, fontSize: 16 },
+  approvalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
+  approvalCopy: { flex: 1, minWidth: 170, fontFamily: F.en.medium, color: C.textSecondary, fontSize: 12.5, lineHeight: 19 },
+  sectionIntro: { gap: 4, marginTop: 8 },
+  sectionIntroTitle: { fontFamily: F.en.extraBold, color: C.ink900, fontSize: 21, lineHeight: 28, letterSpacing: -0.5 },
+  bodyText: { fontFamily: F.en.regular, color: C.textSecondary, fontSize: 13.5, lineHeight: 22 },
+  facts: { gap: 13 },
+  infoLine: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  infoLabel: { fontFamily: F.en.medium, fontSize: 12.5, color: C.textSecondary, maxWidth: '43%' },
+  infoValue: { fontFamily: F.en.semiBold, fontSize: 12.5, color: C.ink900, flex: 1, textAlign: 'right', lineHeight: 20 },
+  muted: { fontFamily: F.en.medium, color: C.textSecondary, fontSize: 13, lineHeight: 20 },
+  websiteBlock: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12, gap: 6 },
+  microLabel: { fontFamily: F.en.bold, color: C.teal600, fontSize: 10, letterSpacing: 1.1 },
+  websiteValue: { fontFamily: F.en.medium, color: C.teal700, fontSize: 12.5, lineHeight: 20 },
+  logoutAction: { backgroundColor: C.surface, borderRadius: 15, borderColor: C.border, borderWidth: 1, height: 51, flexDirection: 'row', gap: 9, justifyContent: 'center', alignItems: 'center' },
+  logoutText: { color: C.error, fontFamily: F.en.bold, fontSize: 13.5 },
+  footer: { fontFamily: F.en.medium, fontSize: 11, color: C.textTertiary, textAlign: 'center' },
 });

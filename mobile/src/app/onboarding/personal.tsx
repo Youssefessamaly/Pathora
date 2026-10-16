@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthBackButton } from '@/components/auth-back-button';
 import { OnboardingGuard } from '@/components/onboarding/onboarding-guard';
 import { OnboardingStepHeader } from '@/components/onboarding/onboarding-step-header';
 import { PathoraButton } from '@/components/pathora-button';
@@ -99,6 +100,14 @@ function PersonalDetailsScreen() {
     year.length === 4 &&
     isPhoneValid;
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/welcome');
+    }
+  };
+
   const handleContinue = async () => {
     if (!canContinue || isSubmitting || !token) {
       return;
@@ -135,6 +144,8 @@ function PersonalDetailsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
+          <AuthBackButton onPress={handleBack} style={styles.backButton} />
+
           <OnboardingStepHeader step={1} heading="Tell us about yourself" />
 
           <View style={styles.fields}>
@@ -233,7 +244,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: PathoraSpacing[24],
-    paddingTop: PathoraSpacing[24],
+  },
+  backButton: {
+    marginTop: 8,
+    marginBottom: PathoraSpacing[24],
+    alignSelf: 'flex-start',
   },
   fields: {
     gap: PathoraSpacing[20],

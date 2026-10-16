@@ -35,15 +35,14 @@ function greetingForHour(hour: number): string {
   return 'Good evening';
 }
 
-function StatCard({
+/** Same metric-card design as the Company Home dashboard. */
+function MetricCard({
   label,
   value,
-  active,
   onPress,
 }: {
   label: string;
   value: number;
-  active: boolean;
   onPress?: () => void;
 }) {
   return (
@@ -51,9 +50,11 @@ function StatCard({
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed }) => [styles.statCard, pressed && onPress && styles.statCardPressed]}>
-      <Text style={[styles.statValue, !active && styles.statValueMuted]}>{value}</Text>
-      <Text style={[styles.statLabel, !active && styles.statLabelMuted]}>{label}</Text>
+      accessibilityLabel={`${label}: ${value}`}
+      style={({ pressed }) => [styles.metricCard, pressed && onPress && styles.metricCardPressed]}>
+      <View style={styles.metricIndicator} />
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
     </Pressable>
   );
 }
@@ -206,22 +207,20 @@ function InternHomeScreen() {
             />
           )}
 
-          <View style={styles.statsRow}>
-            <StatCard
+          <View style={styles.metricsRow}>
+            <MetricCard
               label="Applications"
               value={applicationsCount}
-              active
               onPress={() => router.push('/intern/applications')}
             />
-            <StatCard
+            <MetricCard
               label="Saved"
               value={savedCount}
-              active
               onPress={() => router.push('/intern/favorites')}
             />
             {/* No INTERVIEW application status exists yet — always 0, never derived from
-                ACCEPTED. */}
-            <StatCard label="Interviews" value={0} active={false} />
+                ACCEPTED. This card remains non-interactive until that feature exists. */}
+            <MetricCard label="Interviews" value={0} />
           </View>
 
           <View style={styles.sectionHeaderRow}>
@@ -327,39 +326,24 @@ const styles = StyleSheet.create({
   retryButton: {
     minWidth: 140,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: PathoraSpacing[12],
-  },
-  statCard: {
+  metricsRow: { flexDirection: 'row', gap: PathoraSpacing[8] },
+  metricCard: {
     flex: 1,
-    borderRadius: PathoraRadius[14],
+    minWidth: 0,
     backgroundColor: PathoraColors.surface,
+    borderRadius: PathoraRadius[14],
     borderWidth: 1,
     borderColor: PathoraColors.border,
+    paddingHorizontal: PathoraSpacing[12],
     paddingVertical: PathoraSpacing[16],
-    alignItems: 'center',
-    gap: 4,
+    minHeight: 112,
+    justifyContent: 'center',
+    gap: PathoraSpacing[8],
   },
-  statCardPressed: {
-    opacity: 0.7,
-  },
-  statValue: {
-    fontFamily: PathoraFonts.en.extraBold,
-    fontSize: 20,
-    color: PathoraColors.ink900,
-  },
-  statValueMuted: {
-    color: PathoraColors.textTertiary,
-  },
-  statLabel: {
-    fontFamily: PathoraFonts.en.medium,
-    fontSize: 12,
-    color: PathoraColors.textSecondary,
-  },
-  statLabelMuted: {
-    color: PathoraColors.textTertiary,
-  },
+  metricCardPressed: { opacity: 0.72 },
+  metricIndicator: { width: 25, height: 4, borderRadius: 999, backgroundColor: PathoraColors.teal500 },
+  metricValue: { fontFamily: PathoraFonts.en.extraBold, fontSize: 28, color: PathoraColors.ink900, lineHeight: 32 },
+  metricLabel: { fontFamily: PathoraFonts.en.semiBold, fontSize: 11.5, color: PathoraColors.textSecondary },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
